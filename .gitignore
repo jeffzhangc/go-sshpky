@@ -1,0 +1,10 @@
+.env
+.idea
+.gobuild
+./cache
+/vendor/
+/release/
+sshpky
+/trush/
+/_build/
+
