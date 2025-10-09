@@ -1,11 +1,13 @@
+//go:build darwin
+// +build darwin
+
 package km
 
 import (
 	"fmt"
-	"time"
+	"sshpky/pkg/utils"
 
 	"github.com/keybase/go-keychain"
-	"github.com/pquerna/otp/totp"
 )
 
 const (
@@ -18,7 +20,32 @@ const (
 )
 
 func GenerateOTP(secret string) (string, error) {
-	return totp.GenerateCode(secret, time.Now())
+	return utils.GenerateCode(secret)
+}
+
+func getHostKey(user, host string) string {
+	return fmt.Sprintf("%s@%s", user, host)
+}
+
+func SaveMFASecret(user, host, secret string) error {
+	return savePwdByType(getHostKey(user, host), PWD_GOOGLE, secret)
+}
+func GetMFASecret(user, host string) (string, error) {
+	pwd, err := getPasswordByType(getHostKey(user, host), PWD_GOOGLE)
+	if err != nil {
+		return pwd, err
+	}
+	if pwd != "" && len(pwd) > 0 {
+		return GenerateOTP(pwd)
+	}
+	return "", nil
+}
+
+func GetPassword(username, host string) (string, error) {
+	return getPasswordByType(getHostKey(username, host), PWD_NORMAL)
+}
+func SavePassword(username, host, password string) error {
+	return savePwdByType(getHostKey(username, host), PWD_NORMAL, password)
 }
 
 func getPasswordByType(key string, category string) (string, error) {
@@ -77,29 +104,4 @@ func savePwdByType(key string, category string, secret string) error {
 		return fmt.Errorf("keychain add error: %v", err)
 	}
 	return nil
-}
-
-func getHostKey(user, host string) string {
-	return fmt.Sprintf("%s@%s", user, host)
-}
-
-func SaveMFASecret(user, host, secret string) error {
-	return savePwdByType(getHostKey(user, host), PWD_GOOGLE, secret)
-}
-func GetMFASecret(user, host string) (string, error) {
-	pwd, err := getPasswordByType(getHostKey(user, host), PWD_GOOGLE)
-	if err != nil {
-		return pwd, err
-	}
-	if pwd != "" && len(pwd) > 0 {
-		return GenerateOTP(pwd)
-	}
-	return "", nil
-}
-
-func GetPassword(username, host string) (string, error) {
-	return getPasswordByType(getHostKey(username, host), PWD_NORMAL)
-}
-func SavePassword(username, host, password string) error {
-	return savePwdByType(getHostKey(username, host), PWD_NORMAL, password)
 }

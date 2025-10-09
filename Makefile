@@ -3,39 +3,38 @@ VERSION=$(shell cat VERSION)
 BUILD=$(shell git rev-parse --short HEAD)
 EXT_LD_FLAGS="-Wl"
 LD_FLAGS="-s -w -X main.version=$(VERSION) -X main.build=$(BUILD) -extldflags=$(EXT_LD_FLAGS)"
-SRC_DIR=./src
 OUTPUT_DIR=./bin
 
 clean:
 	rm -rf _build/ release/ $(OUTPUT_DIR)/
 
 build:
-	@echo "Building in $(SRC_DIR)..."
-	cd $(SRC_DIR) && go mod tidy
-	cd $(SRC_DIR) && go build -tags release -ldflags $(LD_FLAGS) -o ../$(OUTPUT_DIR)/$(NAME)
+	@echo "Building "
+	go mod tidy
+	go build -tags release -ldflags $(LD_FLAGS) -o $(OUTPUT_DIR)/$(NAME)
 
 build-dev:
-	@echo "Building development version in $(SRC_DIR)..."
+	@echo "Building development version "
 	mkdir -p $(OUTPUT_DIR)
-	cd $(SRC_DIR) && go build -ldflags "-w -X main.version=$(VERSION)-dev -X main.build=$(BUILD) -extldflags=$(EXT_LD_FLAGS)" -o ../$(OUTPUT_DIR)/$(NAME)-dev
+	go build -ldflags "-w -X main.version=$(VERSION)-dev -X main.build=$(BUILD) -extldflags=$(EXT_LD_FLAGS)" -o $(OUTPUT_DIR)/$(NAME)-dev
 
 build-all: clean
 	@echo "Building for all platforms from $(SRC_DIR)..."
 	mkdir -p _build $(OUTPUT_DIR)
-	cd $(SRC_DIR) && GOOS=darwin  GOARCH=arm64 go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-darwin-arm64
-	cd $(SRC_DIR) && GOOS=darwin  GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-darwin-amd64
-	cd $(SRC_DIR) && GOOS=linux   GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-linux-amd64
-	cd $(SRC_DIR) && GOOS=linux   GOARCH=arm   go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-linux-arm
-	cd $(SRC_DIR) && GOOS=linux   GOARCH=arm64 go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-linux-arm64
-	cd $(SRC_DIR) && GOOS=windows GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o ../_build/$(NAME)-$(VERSION)-windows-amd64.exe
+# 	GOOS=darwin  GOARCH=arm64 go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-darwin-arm64
+	GOOS=darwin  GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-darwin-amd64
+	GOOS=linux   GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-linux-amd64
+	GOOS=linux   GOARCH=arm   go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-linux-arm
+	GOOS=linux   GOARCH=arm64 go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-linux-arm64
+	GOOS=windows GOARCH=amd64 go build -tags release -ldflags $(LD_FLAGS) -o _build/$(NAME)-$(VERSION)-windows-amd64.exe
 	cd _build; sha256sum * > sha256sums.txt
 	@echo "Build completed. Binaries are in _build/ directory."
 
 # Build current platform binary to bin/ directory
 build-local: clean
-	@echo "Building for current platform in $(SRC_DIR)..."
+	@echo "Building for current platform "
 	mkdir -p $(OUTPUT_DIR)
-	cd $(SRC_DIR) && go build -tags release -ldflags $(LD_FLAGS) -o ../$(OUTPUT_DIR)/$(NAME)
+	go build -tags release -ldflags $(LD_FLAGS) -o ../$(OUTPUT_DIR)/$(NAME)
 	@echo "Build completed. Binary is in $(OUTPUT_DIR)/ directory."
 
 image:
@@ -73,7 +72,6 @@ info:
 	@echo "Project: $(NAME)"
 	@echo "Version: $(VERSION)"
 	@echo "Build: $(BUILD)"
-	@echo "Source Directory: $(SRC_DIR)"
 	@echo "Output Directory: $(OUTPUT_DIR)"
 
 .PHONY: build build-dev build-all build-local clean image release install install-user info
