@@ -34,7 +34,7 @@ build-all: clean
 build-local: clean
 	@echo "Building for current platform "
 	mkdir -p $(OUTPUT_DIR)
-	go build -tags release -ldflags $(LD_FLAGS) -o ../$(OUTPUT_DIR)/$(NAME)
+	go build -tags release -ldflags $(LD_FLAGS) -o $(OUTPUT_DIR)/$(NAME)
 	@echo "Build completed. Binary is in $(OUTPUT_DIR)/ directory."
 
 image:

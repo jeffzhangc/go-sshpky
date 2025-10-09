@@ -2,9 +2,7 @@
 
 ssh client wrapper
 
-替换  https://github.com/jeffzhangc/sshpky_zsh_plugin
-
-
+替换 https://github.com/jeffzhangc/sshpky_zsh_plugin
 
 ## feature
 
@@ -12,13 +10,16 @@ ssh client wrapper
 2. 记录 google auth secret
 3. 自动使用上传成功的密码登录
 4. 如果有 otp 验证，自动使用上次记录的 secret 生成 otp 验证码进行尝试登录
+5. 新增 保存 连接成功的 ssh 信息 在配置文件中
+6. 删除 配置信息
+7. 配置信息分组
 
+## build
 
-## todo
-
-1. 新增 保存 连接成功的 ssh 信息 在配置文件中
-2. 删除 配置信息
-3. 配置信息分组
+```
+make build
+make install
+```
 
 ## referece
 

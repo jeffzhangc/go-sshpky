@@ -20,7 +20,7 @@ func getShell() (string, error) {
 	case "android":
 		return loginshell.AndroidShell()
 	case "darwin":
-		return "/bin/bash", nil
+		return loginshell.DarwinShell()
 	case "windows":
 		return loginshell.WindowsShell()
 	}
