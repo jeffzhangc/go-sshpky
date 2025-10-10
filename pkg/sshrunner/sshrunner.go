@@ -42,7 +42,7 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 	}
 	c := exec.Command(shell, "-f")
 
-	c.Env = append(os.Environ(), "HISTFILE=/dev/null", "HISTSIZE=0", "HISTFILESIZE=0")
+	c.Env = append(os.Environ(), "HISTFILE=/dev/null", "HISTSIZE=0", "HISTFILESIZE=0", "PROMPT='%# '")
 	pt, err := pty.Start(c)
 	if err != nil {
 		return err
