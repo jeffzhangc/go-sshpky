@@ -8,3 +8,6 @@ sshpky
 /trush/
 /_build/
 
+dist/
+completions/
+.vscode/

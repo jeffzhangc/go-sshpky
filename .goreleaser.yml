@@ -1,0 +1,151 @@
+version: 2
+project_name: go-sshpky
+
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+
+builds:
+  - env:
+      - CGO_ENABLED={{- if eq .Os "darwin" }}1{{ else }}0{{ end }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser -X main.treeState={{ .IsGitDirty }}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    binary: sshpky
+
+archives:
+  - name_template: >-
+      {{- .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    builds_info:
+      group: root
+      owner: root
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: completions/*
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+# snapshot:
+# name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  format: "{{ .SHA }}: {{ .Message }}{{ with .AuthorUsername }} (@{{ . }}){{ end }}"
+  filters:
+    exclude:
+      - "^test:"
+      - "^test\\("
+      - "^chore: update$"
+      - "^chore: docs$"
+      - "^docs: update$"
+      - "^chore: schema$"
+      - "^chore: typo$"
+      - "^chore: auto-update generated files$"
+      - "^chore: update schema$"
+      - "^chore: schema update$"
+      - "^chore\\(deps\\): "
+      - "^(build|ci): "
+      - "merge conflict"
+      - "merge conflict"
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+      - go mod tidy
+  groups:
+    - title: "New Features"
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 100
+    - title: "Security updates"
+      regexp: '^.*?sec(\(.+\))??!?:.+$'
+      order: 150
+    - title: "Bug fixes"
+      regexp: '^.*?(fix|refactor)(\(.+\))??!?:.+$'
+      order: 200
+    - title: "Documentation updates"
+      regexp: ^.*?docs?(\(.+\))??!?:.+$
+      order: 400
+    - title: Other work
+      order: 9999
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+release:
+  github:
+    owner: jeffzhangc
+    name: go-sshpky
+
+  # 简化的发布说明，避免使用可能不存在的变量
+  header: |
+    ## Release {{ .Tag }}
+
+    ssh CLI tool for managing ssh client programmatically.
+
+  footer: |
+    ### Installation
+
+    **Using Homebrew:**
+    ```bash
+    brew install jeffzhangc/tap/sshpky
+    ```
+
+    **Manual installation:**
+    Download the binary for your platform from the Assets section below.
+
+    ### Usage
+    ```bash
+    sshpky --help
+    ```
+
+homebrew_casks:
+  - repository:
+      owner: jeffzhangc
+      name: homebrew-tap
+    name: sshpky
+    homepage: "https://github.com/jeffzhangc/go-sshpky"
+    description: ssh tools , simplified
+    license: MIT
+    completions:
+      bash: "completions/sshpky.bash"
+      zsh: "completions/sshpky.zsh"
+      fish: "completions/sshpky.fish"
+    binary: "sshpky"
+    url:
+      verified: github.com/jeffzhangc/go-sshpky/download
+    uninstall:
+      trash:
+        - "~/.sshpky"
+    caveats: "sshpky help"
+   
