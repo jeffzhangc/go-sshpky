@@ -39,7 +39,10 @@ Examples:
   # Use subcommands for other operations
   sshpky mg list                    # List all groups
   sshpky mg use production         # Switch to production group
-  sshpky conn -g staging appserver  # Connect to specific group's host`,
+  sshpky conn -g staging appserver  # Connect to specific group's host
+  sshpky ms 	# manage ssh configItem for current group
+  sshpky ms groupA	# manage ssh configItem for gropuA
+  `,
 	Args: cobra.ArbitraryArgs, // 允许任意参数
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// 确保配置目录存在
@@ -114,6 +117,7 @@ func init() {
 
 	// 添加 completion 命令
 	rootCmd.AddCommand(completionCmd)
+
 }
 
 func ensureConfigDir() error {

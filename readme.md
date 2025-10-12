@@ -32,6 +32,22 @@ make install
 
 完善文档和使用图片
 
+## ssh config
+
+common config
+
+```
+ControlMaster auto
+ControlPath ~/.ssh/master-%r@%h:%p
+Host *
+    HostKeyAlgorithms +ssh-rsa
+    PubkeyAcceptedKeyTypes +ssh-rsa
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    RequestTTY force
+    RemoteCommand env TERM=xterm-256color bash --login
+```
+
 ## referece
 
 1. [tssh](https://github.com/luanruisong/tssh)
