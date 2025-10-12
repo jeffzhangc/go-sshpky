@@ -14,12 +14,23 @@ ssh client wrapper
 6. 删除 配置信息
 7. 配置信息分组
 
+## install
+
+```
+brew install jeffzhangc/tap/sshpky
+
+```
+
 ## build
 
 ```
 make build
 make install
 ```
+
+## TODO
+
+完善文档和使用图片
 
 ## referece
 
