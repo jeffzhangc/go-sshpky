@@ -118,6 +118,9 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 			for _, line := range strings.Split(data, "\n") {
 				line = strings.Trim(line, " ")
 				line = strings.Trim(line, "\t")
+				if strings.Contains(line, "ssh ") {
+					continue
+				}
 				// 处理主机认证确认
 				if strings.Contains(line, "The authenticity of host") {
 					// 自动确认主机指纹
@@ -129,7 +132,15 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 					data = "" // 清空已处理的数据
 					continue
 				}
-
+				// if strings.Contains(line, "Are you sure you want to continue connecting (yes/no)?") {
+				// 	data = "" // 清空已处理的数据
+				// 	_, err = pt.Write([]byte("yes\n"))
+				// 	if err != nil {
+				// 		errChan <- fmt.Errorf("failed to enter password: %v", err)
+				// 		return
+				// 	}
+				// 	continue
+				// }
 				// 处理密码提示
 				if strings.Contains(strings.ToLower(line), "password") ||
 					strings.Contains(line, "Enter passphrase") ||

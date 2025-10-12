@@ -20,7 +20,7 @@ const (
 	stateTable state = iota
 	stateDetail
 	stateDeleteConfirm
-	stateSearch
+	// stateSearch
 	stateAddForm
 	stateUpdateForm
 	stateQuitWithConn
@@ -57,7 +57,11 @@ type msModel struct {
 	focusedField    int
 	isNewConfig     bool
 	showPassword    bool // 是否显示密码
+	isSearching     bool
 }
+
+// 定义延迟焦点设置的消息
+type delayedFocusMsg struct{}
 
 // 表格样式
 var (
@@ -165,6 +169,7 @@ func initialModel(groupName string) msModel {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Search SSH configurations..."
 	searchInput.Focus()
+	searchInput.Width = 40
 
 	// 初始化表单输入框
 	formInputs := make([]textinput.Model, 8)
@@ -183,6 +188,7 @@ func initialModel(groupName string) msModel {
 	// User
 	formInputs[userField] = textinput.New()
 	formInputs[userField].Placeholder = "e.g., root"
+	formInputs[userField].Width = 40
 
 	// Port
 	formInputs[portField] = textinput.New()
@@ -213,6 +219,7 @@ func initialModel(groupName string) msModel {
 	// Description
 	formInputs[descField] = textinput.New()
 	formInputs[descField].Placeholder = "e.g., Production server (optional)"
+	formInputs[descField].Width = 80
 
 	return msModel{
 		state:           stateTable,
@@ -240,8 +247,33 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch m.state {
 		case stateTable:
+
+			// 如果正在搜索，优先处理搜索输入
+			if m.isSearching {
+				switch msg.String() {
+				case "enter", "esc":
+					// 完成搜索
+					m.isSearching = false
+					m.searchInput.Blur()
+					m.table.Focus()
+					if msg.String() == "enter" {
+						m.searchKeyword = m.searchInput.Value()
+						m.filterConfigs()
+					}
+					return m, nil
+				default:
+					// 更新搜索输入
+					m.searchInput, cmd = m.searchInput.Update(msg)
+					cmds = append(cmds, cmd)
+					// 实时搜索
+					m.searchKeyword = m.searchInput.Value()
+					m.filterConfigs()
+					return m, tea.Batch(cmds...)
+				}
+			}
+
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "q", "ctrl+c", "esc":
 				return m, tea.Quit
 			case "enter":
 				if len(m.filteredConfigs) > 0 {
@@ -260,16 +292,20 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			case "/":
-				m.state = stateSearch
-				m.searchInput.SetValue("")
+				// 开始搜索
+				m.isSearching = true
+				m.searchInput.Focus()
+				m.table.Blur()
 				return m, nil
-			case "n":
+			case "n", "a":
 				m.addNewConfig()
+				return m, nil
 			case "u":
 				if len(m.filteredConfigs) > 0 {
 					selectedIndex := m.table.Cursor()
 					if selectedIndex < len(m.filteredConfigs) {
 						m.updateConfig(m.filteredConfigs[selectedIndex])
+						return m, cmd
 					}
 				}
 			case "c":
@@ -295,6 +331,7 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "u":
 				if m.currentConfig != nil {
 					m.updateConfig(m.currentConfig)
+					return m, cmd
 				}
 			case "c":
 				if m.currentConfig != nil {
@@ -322,15 +359,15 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateTable
 				m.currentConfig = nil
 			}
-		case stateSearch:
-			switch msg.String() {
-			case "enter":
-				m.searchKeyword = m.searchInput.Value()
-				m.filterConfigs()
-				m.state = stateTable
-			case "esc":
-				m.state = stateTable
-			}
+		// case stateSearch:
+		// 	switch msg.String() {
+		// 	case "enter":
+		// 		m.searchKeyword = m.searchInput.Value()
+		// 		m.filterConfigs()
+		// 		m.state = stateTable
+		// 	case "esc":
+		// 		m.state = stateTable
+		// 	}
 		case stateAddForm, stateUpdateForm:
 			switch msg.String() {
 			case "ctrl+s", "enter":
@@ -344,9 +381,9 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// 移动到下一个字段
 					m.nextField()
 				}
-			case "tab":
+			case "tab", "down":
 				m.nextField()
-			case "shift+tab":
+			case "shift+tab", "up":
 				m.prevField()
 			case "esc", "ctrl+c":
 				m.state = stateTable
@@ -358,6 +395,15 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.table.SetWidth(msg.Width - 4)
 		m.table.SetHeight(min(20, len(m.filteredConfigs)+2))
+		// 在 Update 方法中添加处理
+	case delayedFocusMsg:
+		if m.state == stateAddForm || m.state == stateUpdateForm {
+			m.formInputs[m.focusedField].Focus()
+			// 可选：将光标移动到末尾
+			// val := m.formInputs[m.focusedField].Value()
+			// m.formInputs[m.focusedField].SetCursor(len(val))
+		}
+		return m, nil
 	}
 
 	// 更新当前状态的组件
@@ -365,9 +411,9 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateTable:
 		m.table, cmd = m.table.Update(msg)
 		cmds = append(cmds, cmd)
-	case stateSearch:
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		cmds = append(cmds, cmd)
+	// case stateSearch:
+	// 	m.searchInput, cmd = m.searchInput.Update(msg)
+	// 	cmds = append(cmds, cmd)
 	case stateAddForm, stateUpdateForm:
 		for i := range m.formInputs {
 			if i == m.focusedField {
@@ -400,7 +446,15 @@ func (m msModel) View() string {
 	switch m.state {
 	case stateTable:
 		b.WriteString(baseStyle.Render(m.table.View()) + "\n\n")
-		b.WriteString(m.helpView())
+		// b.WriteString(m.helpView())
+
+		// 显示搜索框
+		if m.isSearching {
+			b.WriteString("Search: " + m.searchInput.View() + "\n")
+			b.WriteString(helpStyle.Render("Press Enter to confirm, ESC to cancel • Search updates in real-time") + "\n\n")
+		} else {
+			b.WriteString(m.helpView())
+		}
 
 	case stateDetail:
 		if m.currentConfig != nil {
@@ -412,9 +466,9 @@ func (m msModel) View() string {
 			b.WriteString(m.deleteConfirmView())
 		}
 
-	case stateSearch:
-		b.WriteString("Search: " + m.searchInput.View() + "\n")
-		b.WriteString(helpStyle.Render("Press Enter to search, ESC to cancel"))
+	// case stateSearch:
+	// 	b.WriteString("Search: " + m.searchInput.View() + "\n")
+	// 	b.WriteString(helpStyle.Render("Press Enter to search, ESC to cancel"))
 
 	case stateAddForm, stateUpdateForm:
 		b.WriteString(m.formView())
@@ -461,7 +515,7 @@ func (m msModel) formView() string {
 	}
 
 	// 帮助信息
-	helpText := "Tab/Enter: Next field • Shift+Tab: Previous field • Ctrl+S: Save • ESC: Cancel"
+	helpText := "shang'xiashang'↑↓Tab/Enter: Next field • Shift+Tab: Previous field • Ctrl+S: Save • ESC: Cancel"
 	if m.focusedField == len(m.formInputs)-1 {
 		helpText += " • Enter: Save"
 	}
@@ -472,7 +526,7 @@ func (m msModel) formView() string {
 
 // 帮助信息视图
 func (m msModel) helpView() string {
-	helpText := "↑↓: Navigate • Enter: View details • d: Delete • n: New • u: Update • /: Search • q: Quit"
+	helpText := "↑↓: Navigate • Enter: View details • d: Delete • n: New • u: Update • c: Connect • /: Search • q: Quit"
 	if len(m.filteredConfigs) == 0 {
 		helpText += "\nNo configurations found"
 	} else {
@@ -602,6 +656,10 @@ func (m *msModel) updateConfig(config *config.SshConfigItem) {
 	m.isNewConfig = false
 	m.currentConfig = config
 	m.resetForm()
+	// 先重置所有输入框的焦点状态
+	for i := range m.formInputs {
+		m.formInputs[i].Blur()
+	}
 
 	// 填充现有数据
 	m.formInputs[hostField].SetValue(config.Host)
