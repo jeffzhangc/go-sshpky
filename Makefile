@@ -12,6 +12,7 @@ build:
 	@echo "Building "
 	go mod tidy
 	go build -tags release -ldflags $(LD_FLAGS) -o $(OUTPUT_DIR)/$(NAME)
+	@bash ./scripts/completions.sh
 
 build-dev:
 	@echo "Building development version "
@@ -54,8 +55,26 @@ image:
 # 	gh release create v$(VERSION) release/* --title "v$(VERSION)" --notes "Release v$(VERSION)" 
 # 	@echo "Release v$(VERSION) created."
 
+
+# 安装补全文件到 Homebrew 目录
+install-completions: build
+	@echo "Installing shell completions..."
+	$(eval HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo "/usr/local"))
+	@echo "Using prefix: $(HOMEBREW_PREFIX)"
+	
+	install -d $(HOMEBREW_PREFIX)/etc/bash_completion.d/
+	install -m 644 completions/${NAME}.bash $(HOMEBREW_PREFIX)/etc/bash_completion.d/${NAME}
+	
+	install -d $(HOMEBREW_PREFIX)/share/zsh/site-functions/
+	install -m 644 completions/${NAME}.zsh $(HOMEBREW_PREFIX)/share/zsh/site-functions/_${NAME}
+	
+	install -d $(HOMEBREW_PREFIX)/share/fish/vendor_completions.d/
+	install -m 644 completions/${NAME}.fish $(HOMEBREW_PREFIX)/share/fish/vendor_completions.d/${NAME}.fish
+	
+	@echo "Completions installed successfully!"
+
 # Install to local system (adjust path as needed)
-install: build-local
+install: build install-completions
 	@echo "Installing $(NAME) to /usr/local/bin/..."
 	sudo cp $(OUTPUT_DIR)/$(NAME) /usr/local/bin/$(NAME)
 	@echo "Installation completed."
