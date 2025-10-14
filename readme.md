@@ -44,8 +44,6 @@ Host *
     PubkeyAcceptedKeyTypes +ssh-rsa
     ServerAliveInterval 60
     ServerAliveCountMax 3
-    RequestTTY force
-    RemoteCommand env TERM=xterm-256color bash --login
 ```
 
 ## referece
