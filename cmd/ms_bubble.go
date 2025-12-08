@@ -176,7 +176,7 @@ func initialModel(groupName string) msModel {
 
 	// Host
 	formInputs[hostField] = textinput.New()
-	formInputs[hostField].Width = 40
+	formInputs[hostField].Width = 50
 	formInputs[hostField].Placeholder = "e.g., myserver"
 	formInputs[hostField].Focus()
 
@@ -198,7 +198,7 @@ func initialModel(groupName string) msModel {
 
 	// IdentityFile
 	formInputs[identityFileField] = textinput.New()
-	formInputs[identityFileField].Width = 40
+	formInputs[identityFileField].Width = 80
 	formInputs[identityFileField].Placeholder = "e.g., ~/.ssh/id_rsa (optional)"
 
 	// ProxyCommand
@@ -210,7 +210,7 @@ func initialModel(groupName string) msModel {
 	formInputs[groupField] = textinput.New()
 	cfg := config.GetConfig()
 	gropus := cfg.GetGroupNames()
-	formInputs[groupField].Width = 40
+	formInputs[groupField].Width = 80
 	formInputs[groupField].Placeholder = "e.g., " + strings.Join(gropus, ",")
 	if cfg.Use != "" {
 		formInputs[groupField].SetValue(cfg.Use)
