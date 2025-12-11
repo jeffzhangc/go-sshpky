@@ -115,6 +115,8 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&connArgs.HostName, "hostname", "", "", "hostname for this ssh")
 
+	rootCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
+
 	// 添加 completion 命令
 	rootCmd.AddCommand(completionCmd)
 
