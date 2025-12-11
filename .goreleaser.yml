@@ -11,7 +11,7 @@ builds:
       - CGO_ENABLED={{- if eq .Os "darwin" }}1{{ else }}0{{ end }}
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser -X main.treeState={{ .IsGitDirty }}
+      - -s -w -X go-sshpky/pkg/commom.version={{.Version}} -X go-sshpky/pkg/commom.gitCommit={{.Commit}} -X go-sshpky/pkg/commom.buildTime={{ .CommitDate }} -X go-sshpky/pkg/commom.builtBy=goreleaser -X go-sshpky/pkg/commom.treeState={{ .IsGitDirty }}
     goos:
       - linux
       - windows
