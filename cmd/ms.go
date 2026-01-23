@@ -34,6 +34,8 @@ var msCmd = &cobra.Command{
 This command allows you to list, use, and manage different SSH key groups.
 You can list all configured SSH key groups, search for specific items, 
 delete SSH key configurations, and view detailed information about individual items.`,
+	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
+	Args:              cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		msBubble(args)
 	},

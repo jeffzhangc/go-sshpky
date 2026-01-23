@@ -115,7 +115,7 @@ func (sc *SshConfigItem) GetPassword() string {
 	return km.GetPwd(*sc)
 }
 
-func (sc *SshConfigItem) GetMafSecret() string {
+func (sc *SshConfigItem) GetMfaSecret() string {
 	ssm := NewSSHConfigManager("")
 	dbConf, _ := ssm.FindConfig(sc.Host)
 	if dbConf == nil {
