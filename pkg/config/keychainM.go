@@ -27,11 +27,21 @@ func (k *KeyChainManage) SavePwd(connConf *SshConfigItem) {
 		connConf.MFASecret = ""
 	}
 }
+
+// GetPwd 从系统密钥链中获取密码
 func (k *KeyChainManage) GetPwd(connConf SshConfigItem) string {
-	res, _ := km.GetPassword(connConf.User, connConf.Host)
+	res, err := km.GetPassword(connConf.User, connConf.Host)
+	if res == "" || err != nil {
+		res, _ = km.GetPassword(connConf.User, connConf.HostName)
+	}
 	return res
 }
+
+// GetMAFSecret 从系统密钥链中获取 mfa 密码
 func (k *KeyChainManage) GetMAFSecret(connConf SshConfigItem) string {
-	res, _ := km.GetMFASecret(connConf.User, connConf.Host)
+	res, err := km.GetMFASecret(connConf.User, connConf.Host)
+	if err != nil {
+		res, _ = km.GetMFASecret(connConf.User, connConf.HostName)
+	}
 	return res
 }

@@ -208,7 +208,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 					var optSecret string
 					if otpTryTime == 0 {
 						// optPwd, _ = km.GetMFASecret(username, host)
-						optSecret = connConf.GetMafSecret()
+						optSecret = connConf.GetMfaSecret()
 					}
 					if optSecret == "" {
 						// reader := bufio.NewReader(os.Stdin)
