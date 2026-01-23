@@ -571,7 +571,7 @@ func (m msModel) configDetailView() string {
 	if m.showPassword {
 		// 显示密码信息
 		pwd := config.GetPassword()
-		mafPwd := config.GetMafSecret()
+		mafPwd := config.GetMfaSecret()
 
 		b.WriteString(passwordStyle.Render("Authentication Information:") + "\n")
 		if pwd != "" {
