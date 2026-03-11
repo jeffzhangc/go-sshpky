@@ -66,46 +66,46 @@ type delayedFocusMsg struct{}
 // 表格样式
 var (
 	baseStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240"))
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240"))
 
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7D56F4")).
-			Bold(true).
-			Padding(0, 1)
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true).
+		Padding(0, 1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF6B9D")).
-			Bold(true)
+		Foreground(lipgloss.Color("#FF6B9D")).
+		Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+		Foreground(lipgloss.Color("241"))
 
 	formStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2)
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")).
+		Padding(1, 2)
 
 	fieldStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true)
+		Foreground(lipgloss.Color("205")).
+		Bold(true)
 
 	inputStyle = lipgloss.NewStyle().
-			Width(40)
+		Width(40)
 
 	passwordStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00D26A")).
-			Bold(true)
+		Foreground(lipgloss.Color("#00D26A")).
+		Bold(true)
 
 	hiddenStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Italic(true)
+		Foreground(lipgloss.Color("241")).
+		Italic(true)
 )
 
 // 初始化模型
 func initialModel(groupName string) msModel {
 	// 加载配置
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 	var configs []*config.SshConfigItem
 	var err error
 
@@ -134,9 +134,11 @@ func initialModel(groupName string) msModel {
 	}
 
 	// 创建表格行
-	rows := make([]table.Row, len(configs))
+
+rows := make([]table.Row, len(configs))
 	for i, config := range configs {
-		rows[i] = table.Row{
+	
+rows[i] = table.Row{
 			config.Host,
 			config.HostName,
 			config.User,
@@ -317,11 +319,11 @@ func (m msModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, tea.Quit
 				}
-				// try to connect to current host
-				// if m.currentConfig != nil {
-				// 	fmt.Println("test....xxx", "try to connect", m.currentConfig.Host)
+			// try to connect to current host
+			// if m.currentConfig != nil {
+			// 	fmt.Println("test....xxx", "try to connect", m.currentConfig.Host)
 
-				// }
+			// }
 			}
 
 		case stateDetail:
@@ -715,7 +717,7 @@ func (m *msModel) saveConfig() bool {
 		Desc:         m.formInputs[descField].Value(),
 	}
 
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	if m.isNewConfig {
 		// 检查是否已存在
@@ -796,9 +798,11 @@ func (m *msModel) filterConfigs() {
 	}
 
 	// 更新表格行
-	rows := make([]table.Row, len(m.filteredConfigs))
+
+rows := make([]table.Row, len(m.filteredConfigs))
 	for i, config := range m.filteredConfigs {
-		rows[i] = table.Row{
+	
+rows[i] = table.Row{
 			config.Host,
 			config.HostName,
 			config.User,
@@ -813,7 +817,7 @@ func (m *msModel) filterConfigs() {
 
 // 删除配置
 func (m *msModel) deleteConfig(host string) {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 	err := manager.DeleteConfig(host)
 	if err != nil {
 		m.err = err
@@ -826,7 +830,7 @@ func (m *msModel) deleteConfig(host string) {
 
 // 重新加载配置
 func (m *msModel) reloadConfigs() {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 	var err error
 	if m.groupName != "" {
 		m.configs, err = manager.GetConfigsByGroup(m.groupName)
@@ -853,6 +857,9 @@ func msBubble(args []string) {
 	groupName := ""
 	if len(args) > 0 {
 		groupName = args[0]
+	}
+	if connArgs.Group != "" {
+		groupName = connArgs.Group
 	}
 
 	model := initialModel(groupName)

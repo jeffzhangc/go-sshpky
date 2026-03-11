@@ -11,8 +11,7 @@ import (
 )
 
 var (
-	configDir  string
-	configFile string
+	configDir string
 )
 
 var rootCmd = &cobra.Command{
@@ -99,7 +98,6 @@ func init() {
 	defaultConfigDir := filepath.Join(homeDir, ".sshpky")
 
 	rootCmd.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfigDir, "config directory")
-	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "f", "config.yaml", "config file name")
 
 	// 用户参数 - 如果同时在 destination 和 -u 中指定，以 -u 为准
 	rootCmd.Flags().StringVarP(&connArgs.User, "user", "u", "", "username for SSH connection")
@@ -111,7 +109,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&connArgs.IdentityFile, "identity", "i", "", "identity file (private key) for public key authentication")
 
 	// group 信息
-	rootCmd.Flags().StringVarP(&connArgs.Group, "group", "g", "", "group for this ssh")
+	rootCmd.PersistentFlags().StringVarP(&connArgs.Group, "group", "g", "", "group for this ssh")
 
 	rootCmd.Flags().StringVarP(&connArgs.HostName, "hostname", "", "", "hostname for this ssh")
 

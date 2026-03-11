@@ -50,7 +50,7 @@ func connValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	group, _ := cmd.Flags().GetString("group")
 
 	// 加载配置
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 	var configs []*config.SshConfigItem
 	var err error
 

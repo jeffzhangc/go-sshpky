@@ -101,7 +101,7 @@ func (sc *SshConfigItem) getGroup() *SshpkyGroupConfig {
 }
 
 func (sc *SshConfigItem) GetPassword() string {
-	ssm := NewSSHConfigManager("")
+	ssm := NewSSHConfigManager()
 	dbConf, _ := ssm.FindConfig(sc.Host)
 	if dbConf == nil {
 		return ""
@@ -116,7 +116,7 @@ func (sc *SshConfigItem) GetPassword() string {
 }
 
 func (sc *SshConfigItem) GetMfaSecret() string {
-	ssm := NewSSHConfigManager("")
+	ssm := NewSSHConfigManager()
 	dbConf, _ := ssm.FindConfig(sc.Host)
 	if dbConf == nil {
 		return ""

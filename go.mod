@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/chzyer/readline v1.5.1
 	github.com/creack/pty v1.1.24
+	github.com/fatih/color v1.18.0
 	github.com/golang/glog v1.2.5
 	github.com/google/goexpect v0.0.0-20210430020637-ab937bf7fd6f
 	github.com/google/goterm v0.0.0-20200907032337-555d40f16ae2
@@ -15,6 +16,7 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/riywo/loginshell v0.0.0-20200815045211-7d26008be1ab
 	github.com/spf13/cobra v1.10.1
+	github.com/zalando/go-keyring v0.2.6
 	github.com/ziutek/telnet v0.1.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/term v0.36.0
@@ -32,7 +34,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/golang/protobuf v1.3.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -47,7 +48,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	github.com/zalando/go-keyring v0.2.6 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect

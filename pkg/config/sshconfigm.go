@@ -22,12 +22,10 @@ var commonConf []string = []string{}
 var sshConfigs []*SshConfigItem = []*SshConfigItem{}
 
 // NewSSHConfigManager 创建新的 SSH 配置管理器
-func NewSSHConfigManager(configPath string) *SSHConfigManager {
+func NewSSHConfigManager() *SSHConfigManager {
 	once.Do(func() {
 		homeDir, _ := os.UserHomeDir()
-		if configPath == "" {
-			configPath = filepath.Join(homeDir, ".ssh", "config")
-		}
+		configPath := filepath.Join(homeDir, ".ssh", "config")
 		sshConfigM = &SSHConfigManager{
 			ConfigPath: configPath,
 		}
@@ -443,7 +441,7 @@ func (m *SSHConfigManager) ValidateConfig() error {
 
 // 对外方法，保存 configItem
 func SaveConfigFromConn(connConf SshConfigItem) {
-	ssm := NewSSHConfigManager("")
+	ssm := NewSSHConfigManager()
 	var group *SshpkyGroupConfig = connConf.getGroup()
 	if connConf.Group == "" {
 		connConf.Group = config.Use

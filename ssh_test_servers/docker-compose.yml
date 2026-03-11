@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ssh-password:
+    build:
+      context: ./password
+    ports:
+      - "2222:22"
+    container_name: ssh-password
+
+  ssh-pubkey:
+    build:
+      context: ./pubkey
+    ports:
+      - "2223:22"
+    container_name: ssh-pubkey
+
+  ssh-mfa:
+    build:
+      context: ./mfa
+    ports:
+      - "2224:22"
+    container_name: ssh-mfa

@@ -1,0 +1,23 @@
+# Group: test
+# EditTime: 2025-10-07 14:33:58
+Host t_mfa
+    HostName 127.0.0.1
+    User testuser
+    IdentityFile ~/.ssh/shilei/enecloud_ems_lite.pem
+
+
+# Group: test
+# EditTime: 2025-10-07 14:33:58
+Host t_publickey
+    HostName 127.0.0.1
+    Port 2223
+    User testuser
+    IdentityFile test_id_rsa
+
+# Group: test
+# EditTime: 2025-10-07 14:33:58
+Host t_password
+    HostName 127.0.0.1
+    Port 2222
+    User testuser
+

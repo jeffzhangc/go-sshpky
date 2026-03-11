@@ -1,0 +1,10 @@
+# ssh_test_servers/password/sshd_config
+Port 22
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication no
+ChallengeResponseAuthentication no
+UsePAM yes
+Subsystem sftp /usr/lib/openssh/sftp-server
+AcceptEnv LANG LC_*
+PrintMotd no

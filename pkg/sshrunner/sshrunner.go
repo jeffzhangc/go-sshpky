@@ -29,7 +29,7 @@ type SSHOptions struct {
 func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 	shell, err := getShell()
 
-	ms := config.NewSSHConfigManager("")
+	ms := config.NewSSHConfigManager()
 	cnf, _ := ms.FindConfig(conn.Host)
 	if cnf != nil {
 		// 使用 配置文件中的 conn 信息
@@ -122,7 +122,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 					continue
 				}
 				// 处理主机认证确认
-				if strings.Contains(line, "The authenticity of host") {
+			if strings.Contains(line, "The authenticity of host") {
 					// 自动确认主机指纹
 					_, err := pt.Write([]byte("yes\n"))
 					if err != nil {
@@ -142,7 +142,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 				// 	continue
 				// }
 				// 处理密码提示
-				if strings.Contains(strings.ToLower(line), "password") ||
+			if strings.Contains(strings.ToLower(line), "password") ||
 					strings.Contains(line, "Enter passphrase") ||
 					strings.Contains(line, "Password:") ||
 					strings.Contains(line, "password:") {
@@ -183,7 +183,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 				}
 
 				// 检查认证失败
-				if strings.Contains(line, "Permission denied") ||
+			if strings.Contains(line, "Permission denied") ||
 					strings.Contains(line, "Authentication failed") ||
 					strings.Contains(line, "Access denied") {
 					errChan <- fmt.Errorf("authentication failure")
@@ -191,7 +191,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 				}
 
 				// 检查认证成功 - 出现命令提示符或成功连接
-				if strings.Contains(line, "$") ||
+			if strings.Contains(line, "$") ||
 					strings.Contains(line, "#") ||
 					strings.Contains(line, ">") ||
 					strings.Contains(line, "Last login") ||
@@ -280,16 +280,17 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 		return "", fmt.Errorf("timed out waiting for prompt")
 	}
 }
+
 func savePwd(connConf config.SshConfigItem, otpSecret, inputPassword string) {
 	// username := connConf.User
 	// host := connConf.HostName
 
 	// if inputPassword != "" {
-	// 	km.SavePassword(username, host, inputPassword)
+	// 	ke.SavePassword(username, host, inputPassword)
 	// }
 
 	// if otpSecret != "" {
-	// 	km.SaveMFASecret(username, host, otpSecret)
+	// 	ke.SaveMFASecret(username, host, otpSecret)
 	// }
 	if otpSecret != "" {
 		connConf.MFASecret = otpSecret

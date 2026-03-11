@@ -17,7 +17,7 @@ var (
 )
 
 /**
- *
+ * 
  * manager ssh 管理、显示 ssh 配置内容
  * 1. list 显示 当前 use group 下所有的 ssh 配置信息
  * 			-s 搜索 模糊匹配
@@ -25,7 +25,7 @@ var (
  * 			-s 搜索
  * 3. delete abc 删除 abc 的 ssh 配置信息
  * 4. get abc 显示 abc 的 ssh 配置信息
- *
+ * 
  */
 var msCmd = &cobra.Command{
 	Use:   "ms",
@@ -114,16 +114,16 @@ func msGetCmdValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]
 }
 
 func listSSHConfigs(args []string, searchKeyword string, showDetail bool) {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	var configs []*config.SshConfigItem
 	var err error
 
 	// 确定要显示的组
-	groupName := ""
-	if len(args) > 0 {
+	groupName := connArgs.Group // Prioritize -g flag
+	if groupName == "" && len(args) > 0 {
 		groupName = args[0]
-	} else {
+	} else if groupName == "" {
 		// 使用当前激活的组
 		cfg := config.GetConfig()
 		groupName = cfg.Use
@@ -214,7 +214,7 @@ func listSSHConfigs(args []string, searchKeyword string, showDetail bool) {
 }
 
 func deleteSSHConfig(host string) {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	// 先确认配置是否存在
 	config, err := manager.FindConfig(host)
@@ -246,7 +246,7 @@ func deleteSSHConfig(host string) {
 }
 
 func getSSHConfig(host string) {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	config, err := manager.FindConfig(host)
 	if err != nil {
@@ -259,7 +259,7 @@ func getSSHConfig(host string) {
 }
 
 func addSSHConfig() {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	fmt.Println("Add new SSH configuration:")
 	fmt.Println("--------------------------")
@@ -312,7 +312,7 @@ func addSSHConfig() {
 }
 
 func updateSSHConfig(host string) {
-	manager := config.NewSSHConfigManager("")
+	manager := config.NewSSHConfigManager()
 
 	// 获取现有配置
 	existing, err := manager.FindConfig(host)
