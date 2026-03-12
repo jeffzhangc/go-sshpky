@@ -11,3 +11,4 @@ sshpky
 dist/
 completions/
 .vscode/.qwen/
+.qwen/
