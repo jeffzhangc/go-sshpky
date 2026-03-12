@@ -108,7 +108,7 @@ func connValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]stri
 func runConn(connArgs config.SshConfigItem, args []string) {
 	// 构建 SSH 命令
 	sshCmd := buildSSHCommand(connArgs)
-	fmt.Println("Executing:", sshCmd)
+
 
 	// 这里可以添加实际的 SSH 连接逻辑
 	// exec.Command("ssh", sshArgs...)

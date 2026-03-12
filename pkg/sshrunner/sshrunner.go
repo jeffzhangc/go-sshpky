@@ -3,288 +3,334 @@ package sshrunner
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
+	"net"
 	"os"
 	"os/exec"
-	"os/signal"
+	"os/user"
+	"path/filepath"
 	"sshpky/pkg/config"
 	"sshpky/pkg/km"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/creack/pty"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 )
 
-type SSHOptions struct {
-	Host     string
-	SSHArgs  []string
-	Password string
-	OTPCode  string
-	Debug    bool
-}
-
+// RunSSH establishes an interactive SSH connection using the native Go SSH library.
+// It handles public key, password, and keyboard-interactive (MFA/OTP) authentication.
 func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
-	shell, err := getShell()
-
 	ms := config.NewSSHConfigManager()
 	cnf, _ := ms.FindConfig(conn.Host)
 	if cnf != nil {
-		// 使用 配置文件中的 conn 信息
 		conn = *cnf
-		// fmt.Printf("find %s from config\n", conn.Host)
 	}
 
+	if conn.User == "" {
+		currentUser, err := user.Current()
+		if err == nil {
+			log.Printf("ssh: user not specified, defaulting to current user %s", currentUser.Username)
+			conn.User = currentUser.Username
+		} else {
+			log.Printf("ssh: warning: could not get current user: %v", err)
+		}
+	}
+
+	var usedPassword, usedMfaSecret string
+	authMethods := []ssh.AuthMethod{}
+
+	// --- 1. Public Keys (Temporarily Disabled for Debugging) ---
+	var signers []ssh.Signer
+	// a. From config
+	if conn.IdentityFile != "" {
+		key, err := os.ReadFile(conn.IdentityFile)
+		if err == nil {
+			signer, err := ssh.ParsePrivateKey(key)
+			if err == nil {
+				signers = append(signers, signer)
+			}
+		}
+	} else {
+		// b. From default locations
+		home, _ := os.UserHomeDir()
+		defaultKeyPaths := []string{
+			filepath.Join(home, ".ssh", "id_rsa"),
+			filepath.Join(home, ".ssh", "id_ed25519"),
+			filepath.Join(home, ".ssh", "id_dsa"),
+		}
+		for _, keyPath := range defaultKeyPaths {
+			key, err := os.ReadFile(keyPath)
+			if err == nil {
+				signer, err := ssh.ParsePrivateKey(key)
+				if err == nil {
+					signers = append(signers, signer)
+				}
+			}
+		}
+	}
+
+	if len(signers) > 0 {
+		log.Printf("auth: found %d public key(s)", len(signers))
+		authMethods = append(authMethods, ssh.PublicKeys(signers...))
+	}
+
+	// --- 2. Keyboard Interactive ---
+	// Handles MFA/OTP and can also handle password prompts from the server.
+	challenge := func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+		log.Printf("auth: keyboard-interactive challenge received. Questions: %v", questions)
+		answers = make([]string, len(questions))
+		for i, q := range questions {
+			q = strings.TrimSpace(q)
+			fmt.Printf("%s ", q)
+
+			isPassword := strings.Contains(strings.ToLower(q), "password")
+			isMfa := strings.Contains(strings.ToLower(q), "verification code") || strings.Contains(strings.ToLower(q), "otp")
+
+			if isPassword {
+				var password string
+				password = conn.GetPassword()
+				if password == "" {
+					log.Printf("auth: prompting user for password via keyboard-interactive\n")
+
+					password, err = readPassword("Password: ")
+					if err != nil {
+						return nil, err
+					}
+					usedPassword = password // Capture for saving
+				} else {
+					log.Printf("auth: using stored password for keyboard-interactive\n")
+				}
+				answers[i] = password
+			} else if isMfa {
+				var mfaSecret string
+				mfaSecret = conn.GetMfaSecret()
+				if mfaSecret == "" {
+					log.Printf("auth: prompting user for MFA secret via keyboard-interactive\n")
+					mfaSecret, err = readPassword("MFA Secret: ")
+					if err != nil {
+						return nil, err
+					}
+					usedMfaSecret = mfaSecret // Capture for saving
+				} else {
+					log.Printf("auth: using stored MFA secret for keyboard-interactive\n")
+				}
+				otp, err := km.GenerateOTP(mfaSecret)
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate OTP: %w", err)
+				}
+				answers[i] = otp
+			} else {
+				log.Printf("auth: generic prompt in keyboard-interactive: %s", q)
+				ans, err := bufio.NewReader(os.Stdin).ReadString('\n')
+				if err != nil {
+					return nil, err
+				}
+				answers[i] = strings.TrimSpace(ans)
+			}
+		}
+		return answers, nil
+	}
+	authMethods = append(authMethods, ssh.KeyboardInteractive(challenge))
+	authMethods = append(authMethods, ssh.PasswordCallback(func() (secret string, err error) {
+		password := conn.GetPassword()
+		if password == "" {
+			log.Printf("auth: prompting user for password via keyboard-interactive")
+			password, err = readPassword("Password: ")
+			if err != nil {
+				return "", err
+			}
+			usedPassword = password // Capture for saving
+		} else {
+			log.Printf("auth: using stored password for keyboard-interactive")
+		}
+		return password, nil
+	}))
+
+	// Setup host key callback
+	hostKeyCallback, err := createHostKeyCallback()
 	if err != nil {
-		shell = "/bin/bash"
+		return fmt.Errorf("failed to create host key callback: %w", err)
 	}
-	c := exec.Command(shell, "-f")
 
-	c.Env = append(os.Environ(), "HISTFILE=/dev/null", "HISTSIZE=0", "HISTFILESIZE=0", "PROMPT='%# '")
-	pt, err := pty.Start(c)
+	log.Printf("auth: offering %d method(s)", len(authMethods))
+
+	clientConfig := &ssh.ClientConfig{
+		User:            conn.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         15 * time.Second,
+	}
+
+	// Dial
+	addr := fmt.Sprintf("%s:%d", conn.HostName, conn.Port)
+	log.Printf("ssh: dialing %s with user %s", addr, conn.User)
+	client, err := ssh.Dial("tcp", addr, clientConfig)
+	if err != nil {
+		return fmt.Errorf("failed to dial: %w", err)
+	}
+	defer client.Close()
+
+	// Save credentials if any new ones were used
+	go savePwd(conn, usedMfaSecret, usedPassword)
+
+	// Create session
+	session, err := client.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	// Set up terminal
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return fmt.Errorf("failed to make terminal raw: %w", err)
+	}
+	defer term.Restore(fd, oldState)
+
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+	session.Stdin = os.Stdin
+
+	termWidth, termHeight, err := term.GetSize(fd)
+	if err != nil {
+		return fmt.Errorf("failed to get terminal size: %w", err)
+	}
+
+	// Request PTY
+	if err := session.RequestPty("xterm-256color", termHeight, termWidth, ssh.TerminalModes{}); err != nil {
+		return fmt.Errorf("failed to request PTY: %w", err)
+	}
+
+	// Handle window size changes
+	watchWindowSize(fd, session)
+
+	// Start shell
+	if err := session.Shell(); err != nil {
+		return fmt.Errorf("failed to start shell: %w", err)
+	}
+
+	// Wait for the session to finish
+	err = session.Wait()
+	if err != nil {
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			// The program has exited with an exit code != 0.
+			// This is not a problem with the connection itself.
+			// We can just exit with the same code.
+			os.Exit(exitErr.ExitStatus())
+		}
+		// It's some other error, like the connection broke.
+		return err
+	}
+
+	return nil
+}
+
+func createHostKeyCallback() (ssh.HostKeyCallback, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	knownHostsPath := fmt.Sprintf("%s/.ssh/known_hosts", home)
+
+	// Ensure the known_hosts file exists
+	f, err := os.OpenFile(knownHostsPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open known_hosts file: %w", err)
+	}
+	f.Close()
+
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create knownhosts callback: %w", err)
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := hostKeyCallback(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		keyErr, ok := err.(*knownhosts.KeyError)
+		if !ok {
+			return fmt.Errorf("unexpected host key error: %w", err)
+		}
+
+		// Host is not in known_hosts, add it
+		if len(keyErr.Want) == 0 {
+			log.Printf("Adding new host %s to known_hosts", hostname)
+			f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				return fmt.Errorf("could not write to known_hosts file: %v", err)
+			}
+			defer f.Close()
+			_, err = f.WriteString(knownhosts.Line([]string{hostname}, key) + "\n")
+			return err
+		}
+
+		// Host key mismatch. Remove old key and add new one.
+		log.Printf("WARNING: Host key mismatch for %s. Removing old key and adding new one.", hostname)
+		log.Printf("Old key fingerprint(s): %s", keyErr.Want[0].Key.Type())
+		log.Printf("New key fingerprint: %s", ssh.FingerprintSHA256(key))
+
+		// Use ssh-keygen to remove the old key
+		cmd := exec.Command("ssh-keygen", "-R", hostname)
+		if err := cmd.Run(); err != nil {
+			log.Printf("WARNING: failed to remove old host key with ssh-keygen: %v", err)
+			// Fallback to manual removal attempt
+			if err := removeHostFromKnownHostsManual(knownHostsPath, hostname); err != nil {
+				return fmt.Errorf("failed to remove old host key for %s: %w", hostname, err)
+			}
+		}
+
+		// Add the new key
+		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return fmt.Errorf("could not write to known_hosts file: %v", err)
+		}
+		defer f.Close()
+		_, err = f.WriteString(knownhosts.Line([]string{hostname}, key) + "\n")
+		return err
+	}, nil
+}
+
+// removeHostFromKnownHostsManual provides a basic way to remove a host from known_hosts
+// This is a fallback if `ssh-keygen -R` fails.
+func removeHostFromKnownHostsManual(knownHostsPath, hostname string) error {
+	in, err := os.ReadFile(knownHostsPath)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = pt.Close() }()
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGHUP)
-	go func() {
-		for range ch {
-			if err := pty.InheritSize(os.Stdin, pt); err != nil {
-				log.Printf("error resizing pty: %s", err)
-			}
+	var out []byte
+	for len(in) > 0 {
+		_, hosts, _, _, rest, err := ssh.ParseKnownHosts(in)
+		if err != nil {
+			// Handle parse errors, maybe just append the rest of the file
+			out = append(out, in...)
+			break
 		}
-	}()
-	ch <- syscall.SIGHUP
 
-	errChan := make(chan error, 10)
-
-	go func() {
-		// if _, err := pt.Write([]byte("unset HISTFILE; export HISTSIZE=0 \n " + sshCmd + ";exit\n")); err != nil {
-		if _, err := pt.Write([]byte(sshCmd + ";exit\n")); err != nil {
-			errChan <- err
-		}
-	}()
-
-	_, err = autoSSHWithLogin(pt, conn)
-	errChan <- err
-	select {
-	case er := <-errChan:
-		return er
-	}
-	// // fmt.Println(buf, err)
-	// if err != nil {
-	// 	fmt.Println("runssh error", buf, err)
-	// 	return err
-	// }
-	// return nil
-}
-
-func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error) {
-	errChan := make(chan error)
-	msgChan := make(chan string)
-
-	host := connConf.HostName
-
-	var (
-		inputPassword    string
-		inputOtpSecret   string
-		autoTryLoginTime int
-		otpTryTime       int
-	)
-
-	go func() {
-
-		var data string
-		// var err error
-		// reader := bufio.NewReader(pt)
-		for {
-			buf := make([]byte, 4096)
-			// n, err := pt.Read(buf)
-			n, err := pt.Read(buf)
-			// data, err = reader.ReadString('\n')
-			if err != nil {
-				errChan <- err
+		// Check if the current line matches the hostname to be removed
+		isMatch := false
+		for _, h := range hosts {
+			if h == hostname {
+				isMatch = true
 				break
 			}
-			if n == 0 {
-				continue
-			}
-			// 检查是否包含回车符或行结束
-			data += string(buf[:n])
-			for _, line := range strings.Split(data, "\n") {
-				line = strings.Trim(line, " ")
-				line = strings.Trim(line, "\t")
-				if strings.Contains(line, "ssh ") {
-					continue
-				}
-				// 处理主机认证确认
-				if strings.Contains(line, "The authenticity of host") {
-					// 自动确认主机指纹
-					_, err := pt.Write([]byte("yes\n"))
-					if err != nil {
-						errChan <- fmt.Errorf("failed to confirm host: %v", err)
-						return
-					}
-					data = "" // 清空已处理的数据
-					continue
-				}
-				// if strings.Contains(line, "Are you sure you want to continue connecting (yes/no)?") {
-				// 	data = "" // 清空已处理的数据
-				// 	_, err = pt.Write([]byte("yes\n"))
-				// 	if err != nil {
-				// 		errChan <- fmt.Errorf("failed to enter password: %v", err)
-				// 		return
-				// 	}
-				// 	continue
-				// }
-				// 处理密码提示
-				if strings.Contains(strings.ToLower(line), "password") ||
-					strings.Contains(line, "Enter passphrase") ||
-					strings.Contains(line, "Password:") ||
-					strings.Contains(line, "password:") {
-					os.Stdout.WriteString(line)
-
-					var password string
-					var err error
-					if autoTryLoginTime == 0 {
-						// password, err = km.GetPassword(username, host)
-						password = connConf.GetPassword()
-
-						if password != "" && len(password) > 0 {
-							autoTryLoginTime += 1
-							// inputPassword = password // Capture the retrieved password
-						}
-					}
-
-					if password == "" || len(password) == 0 || autoTryLoginTime > 1 {
-						// fmt.Println("output:", data, "wait for input password")
-						// 输入密码
-						// 从终端读取，禁用回显
-						bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
-						if err != nil {
-							errChan <- fmt.Errorf("failed to read password: %v", err)
-							return
-						}
-						password = string(bytePassword)
-						inputPassword = password // Capture the user input password
-					}
-					// fmt.Println() // 在密码输入后换行
-					// os.Stdout.WriteString("\n")
-					time.Sleep(time.Millisecond * 100)
-					_, err = pt.Write([]byte(password + "\n"))
-					if err != nil {
-						errChan <- fmt.Errorf("failed to enter password: %v", err)
-						return
-					}
-					data = "" // 清空已处理的数据
-					continue
-				}
-
-				// 检查认证失败
-				if strings.Contains(line, "Permission denied") ||
-					strings.Contains(line, "Authentication failed") ||
-					strings.Contains(line, "Access denied") {
-					os.Stdout.WriteString(line)
-					errChan <- fmt.Errorf("authentication failure")
-					return
-				}
-
-				// 检查认证成功 - 出现命令提示符或成功连接
-				if strings.Contains(line, "$") ||
-					strings.Contains(line, "#") ||
-					strings.Contains(line, ">") ||
-					strings.Contains(line, "Last login") ||
-					strings.Contains(line, "欢迎") ||
-					strings.Contains(line, "Welcome") {
-					os.Stdout.WriteString("login success\r\n")
-					go savePwd(connConf, inputOtpSecret, inputPassword)
-					msgChan <- data + "\n"
-					return
-				}
-
-				if strings.Contains(line, "OTP Code") || strings.Contains(line, "Verification code:") {
-					os.Stdout.WriteString(line)
-					var optSecret string
-					if otpTryTime == 0 {
-						// optPwd, _ = km.GetMFASecret(username, host)
-						optSecret = connConf.GetMfaSecret()
-						// if optSecret != "" { // Check if retrieved
-						// inputOtpSecret = optSecret // Capture the retrieved MFA secret
-						// }
-					}
-					if optSecret == "" {
-						// reader := bufio.NewReader(os.Stdin)
-						// // fmt.Println("请输入内容：")
-						// byteoptSecret, _ := reader.ReadBytes('\n') // 直接读取到换行符
-						byteoptSecret, err := term.ReadPassword(int(os.Stdin.Fd()))
-						if err != nil {
-							errChan <- fmt.Errorf("failed to read password: %v", err)
-							return
-						}
-						optSecret = string(byteoptSecret)
-						inputOtpSecret = optSecret // Capture the user input MFA secret
-					}
-					optPwd, _ := km.GenerateOTP(optSecret)
-					// inputOtpSecret = optSecret
-					data = "" // 清空已处理的数据
-					_, err = pt.Write([]byte(optPwd + "\n"))
-					if err != nil {
-						errChan <- fmt.Errorf("failed to enter optCode: %v", err)
-						return
-					}
-					continue
-				}
-
-				if strings.Contains(line, "Host key verification failed") {
-					// ssh key error
-					os.Stdout.WriteString(data)
-					os.Stdout.WriteString("auto remove known_hosts? y/n default:y")
-					reader := bufio.NewReader(os.Stdin)
-					// fmt.Println("请输入内容：")
-					confirmStr, _ := reader.ReadBytes('\n') // 直接读取到换行符
-					fmt.Println("write str:", string(confirmStr))
-					if confirmStr != nil && string(confirmStr) == "N" {
-						errChan <- fmt.Errorf("do not modify knonw_hosts password: %v", err)
-						return
-					} else {
-						// os.Stdout.WriteString("auto modified knonw_hosts,retry to sshpky")
-						modifyFixKnowHost(data)
-						errChan <- fmt.Errorf("modified knonw_hosts,retry ssh: %v", host)
-					}
-					data = ""
-					return
-				}
-			}
 		}
-	}()
 
-	timer := time.NewTimer(time.Second * 10)
-	defer timer.Stop()
-
-	select {
-	case newBuffered := <-msgChan:
-		os.Stdout.WriteString(newBuffered)
-		time.Sleep(time.Millisecond * 500)
-
-		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
+		if !isMatch {
+			// Keep the line
+			line := in[:len(in)-len(rest)]
+			out = append(out, line...)
 		}
-		defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
-
-		go func() { _, _ = io.Copy(pt, os.Stdin) }()
-		_, _ = io.Copy(os.Stdout, pt)
-		// os.Stdout.WriteString("x11" + newBuffered + "xxxx")
-		return "", nil
-	case err := <-errChan:
-		return "", err
-	case <-timer.C:
-		return "", fmt.Errorf("timed out waiting for prompt")
+		in = rest
 	}
+
+	return os.WriteFile(knownHostsPath, out, 0600)
 }
 
 func savePwd(connConf config.SshConfigItem, otpSecret, inputPassword string) {
@@ -303,150 +349,12 @@ func savePwd(connConf config.SshConfigItem, otpSecret, inputPassword string) {
 	}
 }
 
-func modifyFixKnowHost(data string) {
-	// 从错误信息中提取主机地址和端口
-	host, port, err := extractHostAndPort(data)
+func readPassword(prompt string) (string, error) {
+	fmt.Print(prompt)
+	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
 	if err != nil {
-		fmt.Printf("提取主机信息失败: %v\n", err)
-		return
+		return "", err
 	}
-
-	// 获取 known_hosts 文件路径
-	knownHostsPath, err := getKnownHostsPath(data)
-	if err != nil {
-		fmt.Printf("获取 known_hosts 文件路径失败: %v\n", err)
-		return
-	}
-
-	fmt.Printf("找到 [%s]:%s 在 %s 文件中，并删除\n", host, port, knownHostsPath)
-
-	// 删除指定主机的记录
-	err = removeHostFromKnownHosts(knownHostsPath, host, port)
-	if err != nil {
-		fmt.Printf("删除记录失败: %v\n", err)
-		return
-	}
-
-	fmt.Println("成功删除已知主机记录")
-}
-
-// 从错误信息中提取主机和端口
-func extractHostAndPort(data string) (string, string, error) {
-	lines := strings.Split(data, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "Host key for [") && strings.Contains(line, "has changed") {
-			// 提取类似 "[10.1.102.34]:5522" 的部分
-			start := strings.Index(line, "[")
-			end := strings.Index(line, "]")
-			if start != -1 && end != -1 {
-				host := line[start+1 : end]
-				// 提取端口
-				portStart := strings.Index(line, "]:")
-				if portStart != -1 {
-					portEnd := strings.Index(line[portStart:], " ")
-					if portEnd == -1 {
-						portEnd = len(line)
-					} else {
-						portEnd += portStart
-					}
-					port := line[portStart+2 : portEnd]
-					return host, port, nil
-				}
-			}
-		}
-	}
-	return "", "", fmt.Errorf("无法从错误信息中提取主机和端口")
-}
-
-// 获取 known_hosts 文件路径
-func getKnownHostsPath(data string) (string, error) {
-	lines := strings.Split(data, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "Offending") && strings.Contains(line, "known_hosts") {
-			// 提取文件路径
-			start := strings.Index(line, "in ")
-			if start != -1 {
-				pathPart := line[start+3:]
-				end := strings.Index(pathPart, ":")
-				if end != -1 {
-					return pathPart[:end], nil
-				}
-				return pathPart, nil
-			}
-		}
-		if strings.Contains(line, "Add correct host key in") {
-			// 从另一行提取文件路径
-			start := strings.Index(line, "in ")
-			if start != -1 {
-				pathPart := line[start+3:]
-				end := strings.Index(pathPart, " to")
-				if end != -1 {
-					return pathPart[:end], nil
-				}
-				return pathPart, nil
-			}
-		}
-	}
-
-	// 如果无法从错误信息中提取，使用默认路径
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("无法获取用户主目录: %v", err)
-	}
-	return homeDir + "/.ssh/known_hosts", nil
-}
-
-// 从 known_hosts 文件中删除指定主机的记录
-func removeHostFromKnownHosts(filePath, host, port string) error {
-	// 检查文件是否存在
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("文件不存在: %s", filePath)
-	}
-
-	// 读取文件
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("打开文件失败: %v", err)
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	targetPattern1 := fmt.Sprintf("[%s]:%s", host, port)
-	targetPattern2 := fmt.Sprintf("%s:%s", host, port)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		// 跳过以目标主机开头的行（两种格式都检查）
-		if strings.HasPrefix(line, targetPattern1) || strings.HasPrefix(line, targetPattern2) {
-			fmt.Printf("删除记录: %s\n", line)
-			continue
-		}
-		lines = append(lines, line)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("读取文件失败: %v", err)
-	}
-
-	// 写回文件
-	return writeLinesToFile(filePath, lines)
-}
-
-// 将行写回文件
-func writeLinesToFile(filePath string, lines []string) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("创建文件失败: %v", err)
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-	for _, line := range lines {
-		_, err := writer.WriteString(line + "\n")
-		if err != nil {
-			return fmt.Errorf("写入文件失败: %v", err)
-		}
-	}
-	return writer.Flush()
+	return string(bytePassword), nil
 }

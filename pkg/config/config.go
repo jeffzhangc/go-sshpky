@@ -29,7 +29,7 @@ type SshConfigItem struct {
 func (s SecretCategory) String() string {
 	switch s {
 	case StoreFile:
-		return "PwStoreFiledStr"
+		return "StoreFile"
 	case StoreKeyChain:
 		return "StoreKeyChain"
 	default:

@@ -442,35 +442,36 @@ func (m *SSHConfigManager) ValidateConfig() error {
 // 对外方法，保存 configItem
 func SaveConfigFromConn(connConf SshConfigItem) {
 	ssm := NewSSHConfigManager()
-	var group *SshpkyGroupConfig = connConf.getGroup()
 	if connConf.Group == "" {
 		connConf.Group = config.Use
 	}
-
 	if connConf.HostName == "" {
 		connConf.HostName = connConf.Host
 	}
 
+	group := connConf.getGroup()
 	if group == nil {
-		// group 不存在，暂不自动保存
-		fmt.Printf("group %s is not exist,do not auto save group\n", connConf.Group)
+		fmt.Printf("group %s does not exist, cannot auto-save config\n", connConf.Group)
 		return
 	}
 
+	keym := group.getKeyManager()
 	existConfig, _ := ssm.FindConfig(connConf.Host)
 
-	// 存储密码
-	keym := group.getKeyManager()
+	if existConfig != nil {
+		// Host exists, check if we need to update secrets
+		oldPwd := keym.GetPwd(*existConfig)
+		oldMfa := keym.GetMAFSecret(*existConfig)
 
-	oldPwd := keym.GetPwd(*existConfig)
-	oldMfa := keym.GetMAFSecret(*existConfig)
-
-	if existConfig != nil && (oldPwd != connConf.Password || oldMfa != connConf.MFASecret) {
-		keym.SavePwd(&connConf)
-		connConf.EditTime = time.Now().Format("2006-01-02 15:04:05")
-		ssm.UpdateConfig(connConf.Host, connConf)
-		fmt.Printf("update %s success\n", connConf.Host)
-	} else if existConfig == nil {
+		// Only save if the unencrypted password/mfa is different from the old decrypted one
+		if (connConf.Password != "" && oldPwd != connConf.Password) || (connConf.MFASecret != "" && oldMfa != connConf.MFASecret) {
+			keym.SavePwd(&connConf)
+			connConf.EditTime = time.Now().Format("2006-01-02 15:04:05")
+			ssm.UpdateConfig(connConf.Host, connConf)
+			fmt.Printf("update %s success\n", connConf.Host)
+		}
+	} else {
+		// Host is new, add it
 		connConf.EditTime = time.Now().Format("2006-01-02 15:04:05")
 		keym.SavePwd(&connConf)
 		ssm.AddConfig(connConf)
