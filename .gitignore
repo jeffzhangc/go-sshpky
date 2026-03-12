@@ -10,4 +10,4 @@ sshpky
 
 dist/
 completions/
-.vscode/
+.vscode/.qwen/
