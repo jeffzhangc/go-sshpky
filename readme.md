@@ -2,14 +2,14 @@
 
 [![Go-sshpky](https://github.com/zhanghailiang/go-sshpky/actions/workflows/go.yml/badge.svg)](https://github.com/zhanghailiang/go-sshpky/actions/workflows/go.yml)
 
-`go-sshpky` is a command-line tool for securely managing and using SSH private keys. It enhances security by integrating with system keychains and supporting hardware-based keys, while providing a user-friendly interface for managing SSH connections.
+`go-sshpky` is a command-line tool for securely managing and using SSH connections. It enhances security by integrating with system keychains, while providing a user-friendly interface for managing SSH hosts in logical groups.
 
 ## Features
 
-*   **Secure Key Management**: Integrates with system keychains (macOS, Windows, Linux) to store private keys securely.
+*   **Flexible Credential Storage**: Supports multiple methods for storing sensitive data. Credentials can be stored securely in your OS's native keychain (`StoreKeyChain`) for maximum security, or encrypted in a local file (`StoreFile`) for portability or in environments without a system keychain.
+*   **Group Management**: Organizes SSH hosts into groups (e.g., `production`, `staging`) for easy management.
 *   **MFA/OTP Support**: Automatically handles Time-based One-Time Passwords (TOTP) for multi-factor authentication.
-*   **Simplified SSH Config**: Manages SSH configurations for multiple hosts with grouping.
-*   **User-Friendly CLI**: Provides an intuitive interface for key and connection management.
+*   **Simplified SSH Workflow**: A clear and simple CLI for managing and connecting to your SSH hosts.
 *   **Cross-Platform**: Supports macOS, Linux, and Windows.
 
 ## Installation
@@ -24,46 +24,56 @@ Ensure that `$GOPATH/bin` is in your system's `PATH`.
 
 ## Quick Start
 
-### 1. Initialize Configuration
+The typical workflow follows a `group -> host -> connect` pattern.
 
-First, initialize the configuration file. This will create a default `~/.go-sshpky/config.yaml` file.
+### 1. Create and Select a Group
+
+First, create a group to organize your hosts.
 
 ```bash
-go-sshpky init
+# Create a new group named 'work'
+sshpky mg add work
+
+# Set 'work' as the default group for subsequent commands
+sshpky mg use work
 ```
 
 ### 2. Add a New SSH Host
 
-Use the `add` command to add a new host to your configuration. This will guide you through the process of setting up the connection details.
+Now, add a new host configuration to the default group (`work`). The `ms add` command will interactively prompt you for connection details.
 
 ```bash
-go-sshpky add
+# Add a new host configuration
+sshpky ms add
 ```
 
 You will be prompted to enter:
-- A name for the host.
+- A name for the host (e.g., `web-server-1`).
 - The SSH user and hostname (`user@host`).
-- The authentication method (e.g., password, private key, hardware key).
+- The authentication method and credentials (password, private key, etc.).
 
 ### 3. Connect to a Host
 
-Once a host is added, you can connect to it using the `conn` command.
+Once a host is added, you can connect to it using its name.
 
 ```bash
-go-sshpky conn <host-name>
+# Connect to the host you just added
+sshpky conn web-server-1
 ```
 
-### 4. List Hosts
-
-To see a list of all configured hosts, use the `list` command.
+You can also connect by specifying the user and host directly, which will use the stored configuration if a match is found.
 
 ```bash
-go-sshpky list
+sshpky conn user@host
 ```
 
 ## Documentation
 
-For more detailed information, advanced usage, and architectural details, please refer to our [full documentation](./docs/README.md).
+For more detailed instructions, including how to manage configurations, use MFA, and more, please refer to our [full Usage Guide](./docs/usage/guide.md).
+
+## Testing
+
+This project includes a Docker-based environment for testing various SSH authentication methods. For detailed instructions on how to run the test suite, please see [TESTING.md](./TESTING.md).
 
 ## License
 

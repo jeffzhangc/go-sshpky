@@ -1,199 +1,283 @@
 # Go-sshpky Usage Guide
 
-This guide provides comprehensive instructions on how to use `go-sshpky` for managing your SSH connections and keys.
+This guide provides comprehensive instructions on how to use `go-sshpky` for managing your SSH connections and credentials.
 
 ## Table of Contents
 
 1.  [Introduction](#1-introduction)
-2.  [Installation](#2-installation)
-3.  [Basic Usage](#3-basic-usage)
-    *   [Initializing Configuration](#initializing-configuration)
-    *   [Adding a New SSH Host](#adding-a-new-ssh-host)
-    *   [Connecting to a Host](#connecting-to-a-host)
-    *   [Listing Configured Hosts](#listing-configured-hosts)
-4.  [Managing Groups](#4-managing-groups)
-    *   [Listing Groups](#listing-groups)
-    *   [Switching Active Group](#switching-active-group)
-    *   [Adding a Host to a Specific Group](#adding-a-host-to-a-specific-group)
-5.  [Managing SSH Config Items (`ms` command)](#5-managing-ssh-config-items-ms-command)
-    *   [Viewing Config Items](#viewing-config-items)
-    *   [Editing Config Items](#editing-config-items)
-    *   [Deleting Config Items](#deleting-config-items)
-6.  [Advanced Features](#6-advanced-features)
+2.  [Core Concepts](#2-core-concepts)
+    *   [Configuration File](#configuration-file)
+    *   [Groups](#groups)
+3.  [Example Configuration Files](#3-example-configuration-files)
+    *   [`~/.go-sshpky/config.yaml`](#~go-sshpkyconfigyaml)
+    *   [`~/.ssh/config`](#~sshconfig)
+4.  [Command: `sshpky mg` (Manage Groups)](#4-command-sshpky-mg-manage-groups)
+    *   [`mg list`](#mg-list)
+    *   [`mg add`](#mg-add)
+    *   [`mg use`](#mg-use)
+    *   [`mg delete`](#mg-delete)
+5.  [Command: `sshpky ms` (Manage SSH Configs)](#5-command-sshpky-ms-manage-ssh-configs)
+    *   [`ms list`](#ms-list)
+    *   [`ms add`](#ms-add)
+    *   [`ms get`](#ms-get)
+    *   [`ms update`](#ms-update)
+    *   [`ms delete`](#ms-delete)
+6.  [Command: `sshpky conn` (Connect)](#6-command-sshpky-conn-connect)
+    *   [Connecting to a Managed Host](#connecting-to-a-managed-host)
+    *   [Direct Connection](#direct-connection)
+7.  [Advanced Features](#7-advanced-features)
     *   [Multi-Factor Authentication (MFA/OTP)](#multi-factor-authentication-mfaotp)
     *   [Using Identity Files (Private Keys)](#using-identity-files-private-keys)
-    *   [ProxyCommand for Jump Hosts](#proxycommand-for-jump-hosts)
-7.  [Troubleshooting](#7-troubleshooting)
-8.  [Examples](#8-examples)
+8.  [Example Workflow](#8-example-workflow)
 
 ---
 
 ## 1. Introduction
 
-`go-sshpky` is a powerful command-line tool designed to simplify and secure your SSH workflow. It allows you to manage multiple SSH connections, credentials, and configurations efficiently, integrating with system keychains for enhanced security and supporting advanced features like MFA.
+`go-sshpky` is a powerful command-line tool designed to simplify and secure your SSH workflow. It allows you to manage multiple SSH connections, credentials, and configurations efficiently by organizing hosts into groups and storing sensitive information in your system's keychain.
 
-## 2. Installation
+## 2. Core Concepts
 
-For installation instructions, please refer to the main [README.md](../../README.md) file.
+### Configuration File
 
-## 3. Basic Usage
+`go-sshpky` stores all its configuration in a YAML file located at `~/.sshpky/config.yaml`. This file is created and managed automatically. It contains your groups and host connection details. Sensitive data like passwords are not stored here directly but are handled by your system's keychain.
 
-### Initializing Configuration
+### Groups
 
-Before using `go-sshpky`, you need to initialize its configuration. This command creates a default `config.yaml` file in `~/.go-sshpky/`.
+Groups are the primary way to organize your SSH hosts. You can create groups for different environments (e.g., `production`, `staging`), projects, or clients. All host configurations (`ms` entries) belong to a group.
 
-```bash
-go-sshpky init
+### Credential Storage Categories
+
+`go-sshpky` supports two main ways to store sensitive credentials (like passwords or MFA secrets) associated with your SSH configurations, controlled by the `category` field in the `config.yaml`:
+
+*   **`category: 0` (StoreFile)**: Credentials are encrypted and stored in a local file. This might be suitable for environments where a system keychain is not available or preferred.
+*   **`category: 1` (StoreKeyChain)**: Credentials are stored securely in your operating system's native keychain (e.g., macOS Keychain, Windows Credential Manager, Linux Secret Service). This is generally the most secure and recommended method.
+
+## 3. Example Configuration Files
+
+To give you a clearer picture, here are examples of what the `go-sshpky` and standard SSH configuration files look like.
+
+### `~/.go-sshpky/config.yaml`
+
+This file is the main configuration for `go-sshpky` and is managed by the tool. You typically don't need to edit it by hand. Its primary role is to define your groups and their settings.
+
+**Important:** The `secret` field contains an encrypted/encoded value that `go-sshpky` uses to manage credentials. It is **not** a plaintext password or MFA secret. You should not manually edit this field.
+
+```yaml
+# 'use' defines the currently active group.
+use: work
+keySize: 24
+groups:
+- name: work
+  # The secret is an encrypted value used by go-sshpky.
+  secret: "<ENCRYPTED_VALUE_1>"
+  autoSave: true
+  desc: Servers for my main job
+  category: 0 # 0: StoreFile (local file), 1: StoreKeyChain (system keychain)
+- name: personal-projects
+  # A group may not have a secret.
+  secret: ""
+  autoSave: true
+  desc: Hobby project servers and VMs
+  category: 1 # 0: StoreFile (local file), 1: StoreKeyChain (system keychain)
+- name: testing-lab
+  secret: "<ENCRYPTED_VALUE_2>"
+  autoSave: true
+  desc: Temporary cloud instances for testing
+  category: 0 # 0: StoreFile (local file), 1: StoreKeyChain (system keychain)
 ```
 
-### Adding a New SSH Host
+*Note: The host connection details (like IP addresses, users, etc.) are managed separately by the `sshpky ms` command and are stored in a different configuration structure that is linked to these groups.*
 
-The `add` command interactively guides you through setting up a new SSH host entry.
 
-```bash
-go-sshpky add
+### `~/.ssh/config`
+
+While `go-sshpky` does not manage this file, it's good practice to have a global SSH config for settings that affect all connections, including those made by `go-sshpky`.
+
+```
+# This file is for global SSH client settings.
+# It is NOT managed by go-sshpky, but its settings can affect go-sshpky's connections.
+
+# Enable connection sharing to speed up subsequent connections to the same host.
+Host *
+    ControlMaster auto
+    ControlPath ~/.ssh/master-%r@%h:%p
+    ControlPersist 10m
+
+# Keep connections alive by sending a packet every 60 seconds.
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
 ```
 
-You will be prompted for:
-*   **Host Name**: A unique alias for your connection (e.g., `my-web-server`).
-*   **User@Host**: The actual SSH user and hostname/IP (e.g., `ubuntu@192.168.1.100`).
-*   **Port**: The SSH port (defaults to 22).
-*   **Authentication Method**: Choose between password, private key, or hardware key.
-*   **Password/Key Path/MFA Secret**: Depending on your chosen method.
+### `~/.ssh/config` Entry Generated by `go-sshpky`
 
-### Connecting to a Host
+`go-sshpky` might generate and add entries like the following to your `~/.ssh/config` file when you connect to a host. These entries often contain encrypted credentials in comments, which `go-sshpky` uses for authentication.
 
-Once a host is configured, you can connect to it using the `conn` command followed by the host name.
-
-```bash
-go-sshpky conn <host-name>
+```
+# Group: work
+# EditTime: 2026-03-12 15:00:00
+# Password: <ENCRYPTED_PASSWORD_STRING>
+# MFASecret: <ENCRYPTED_MFA_SECRET_STRING>
+Host example-host-alias
+    HostName 192.168.1.100
+    Port 22
+    User webadmin
 ```
 
-Example:
-```bash
-go-sshpky conn my-web-server
-```
+## 4. Command: `sshpky mg` (Manage Groups)
 
-You can also pass SSH options directly:
-```bash
-go-sshpky conn -u admin -p 2222 example.com
-```
+This command is used to manage your configuration groups.
 
-### Listing Configured Hosts
+### `mg list`
 
-To view all your configured SSH hosts, use the `list` command.
+Lists all the groups you have created.
 
 ```bash
-go-sshpky list
+sshpky mg list
 ```
 
-This will display a table of your hosts, their users, hostnames, and associated groups.
+### `mg add`
 
-## 4. Managing Groups
-
-`go-sshpky` allows you to organize your SSH configurations into groups (e.g., `production`, `staging`, `development`).
-
-### Listing Groups
-
-To see all defined groups:
+Adds a new, empty group.
 
 ```bash
-go-sshpky mg list
+# Add a group named 'production'
+sshpky mg add production
 ```
 
-### Switching Active Group
+### `mg use`
 
-You can set an active group, which will be used for subsequent `add` or `conn` commands unless overridden.
+Sets a group as the default for all subsequent commands. When you run `sshpky ms add`, the new host will be added to this default group.
 
 ```bash
-go-sshpky mg use <group-name>
+# Set 'production' as the default group
+sshpky mg use production
 ```
 
-Example:
-```bash
-go-sshpky mg use production
-```
+### `mg delete`
 
-### Adding a Host to a Specific Group
-
-When adding a host, you can specify the group using the `-g` flag:
+Deletes a group and all the host configurations within it.
 
 ```bash
-go-sshpky add -g development
+sshpky mg delete production
 ```
 
-Or connect to a host within a specific group:
+## 5. Command: `sshpky ms` (Manage SSH Configs)
+
+This command manages the individual SSH host configurations within your groups. If you don't specify a group with `-g`, it operates on the current default group (set by `sshpky mg use`).
+
+### `ms list`
+
+Lists all SSH host configurations in the specified (or default) group.
 
 ```bash
-go-sshpky conn -g staging appserver
+# List hosts in the default group
+sshpky ms list
+
+# List hosts in the 'staging' group
+sshpky ms list -g staging
 ```
 
-## 5. Managing SSH Config Items (`ms` command)
+### `ms add`
 
-The `ms` command provides more granular control over individual SSH configuration items.
-
-### Viewing Config Items
-
-To view config items for the current active group:
+Interactively adds a new SSH host configuration to a group.
 
 ```bash
-go-sshpky ms
+# Add a host to the default group
+sshpky ms add
 ```
 
-To view config items for a specific group:
+The tool will prompt you for the host alias, connection details (`user@host`), and credentials.
+
+### `ms get`
+
+Retrieves and displays the details of a specific host configuration.
 
 ```bash
-go-sshpky ms <group-name>
+sshpky ms get <host-alias>
 ```
 
-### Editing Config Items
+### `ms update`
 
-The `ms` command will typically open an interactive editor (like `vi` or `nano`) to allow you to modify the configuration details for a host.
+Allows you to modify an existing SSH host configuration.
 
 ```bash
-go-sshpky ms <host-name>
+sshpky ms update <host-alias>
 ```
 
-### Deleting Config Items
+### `ms delete`
 
-(Specific command for deletion to be added/confirmed based on `go-sshpky` CLI)
+Deletes a specific SSH host configuration.
 
-## 6. Advanced Features
+```bash
+sshpky ms delete <host-alias>
+```
+
+## 6. Command: `sshpky conn` (Connect)
+
+This is the command used to initiate an SSH connection.
+
+### Connecting to a Managed Host
+
+You can connect to any host configured with `sshpky ms` by using its alias. `go-sshpky` will find its configuration and connect automatically.
+
+```bash
+sshpky conn <host-alias>
+```
+
+The top-level `sshpky` command is a shortcut for this:
+```bash
+sshpky <host-alias>
+```
+
+### Direct Connection
+
+You can also use `conn` to connect to a host that is not in your configuration, similar to the standard `ssh` command.
+
+```bash
+sshpky conn user@example.com
+sshpky conn -p 2222 -i ~/.ssh/my_key user@example.com
+```
+
+## 7. Advanced Features
 
 ### Multi-Factor Authentication (MFA/OTP)
 
-`go-sshpky` can store and use TOTP secrets for MFA. When adding a host, if you provide an MFA secret, `go-sshpky` will automatically generate and attempt to use the OTP during connection.
+When adding or updating a host with `sshpky ms`, you can provide a TOTP secret. When you connect, `go-sshpky` will automatically calculate the current one-time password and use it for authentication.
 
 ### Using Identity Files (Private Keys)
 
-You can specify an identity file (private key) for authentication when adding a host. `go-sshpky` will manage the path to this key.
+During the `sshpky ms add` process, you can choose "private key" as the authentication method and provide the path to your identity file (e.g., `~/.ssh/id_rsa`).
+
+## 8. Example Workflow
+
+Here is a complete example of setting up a new project:
 
 ```bash
-go-sshpky add --identity /path/to/your/private_key
+# 1. Create a group for the new project
+sshpky mg add my-project
+
+# 2. Set it as the default group
+sshpky mg use my-project
+
+# 3. Add the project's web server
+# Follow the interactive prompts
+sshpky ms add
+
+# Enter 'web-server' as the alias
+# Enter 'deploy@192.0.2.10' as the user@host
+# ...and provide credentials
+
+# 4. Add the project's database server
+sshpky ms add
+
+# Enter 'db-server' as the alias
+# Enter 'admin@192.0.2.11' as the user@host
+# ...and provide credentials
+
+# 5. List the hosts in your project group
+sshpky ms list
+
+# 6. Connect to the web server
+sshpky conn web-server
 ```
-
-### ProxyCommand for Jump Hosts
-
-`go-sshpky` supports `ProxyCommand` for connecting through jump hosts. You can specify this when adding or editing a host configuration.
-
-## 7. Troubleshooting
-
-*   **"Cannot store password on some platforms"**: Check your system keychain permissions.
-*   **"MFA verification failed"**: Ensure your MFA secret is correct and your system time is synchronized.
-*   **Cross-platform compatibility issues**: `go-sshpky` abstracts platform differences using the `IKeyM` interface. If you encounter issues, please report them.
-
-## 8. Examples
-
-*   **Connect to a server with a specific user and port:**
-    ```bash
-    go-sshpky conn -u root -p 2222 my-prod-server
-    ```
-*   **Add a new development server to the 'dev' group:**
-    ```bash
-    go-sshpky add -g dev
-    # Follow prompts
-    ```
-*   **List all hosts in the 'staging' group:**
-    ```bash
-    go-sshpky ms staging
-    ```
