@@ -41,19 +41,33 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 	var usedPassword, usedMfaSecret string
 	authMethods := []ssh.AuthMethod{}
 
-	// --- 1. Public Keys (Temporarily Disabled for Debugging) ---
-	var signers []ssh.Signer
-	// a. From config
+	// If an IdentityFile is specified, prioritize it and use it exclusively.
 	if conn.IdentityFile != "" {
-		key, err := os.ReadFile(conn.IdentityFile)
-		if err == nil {
-			signer, err := ssh.ParsePrivateKey(key)
-			if err == nil {
-				signers = append(signers, signer)
+		identityFile := conn.IdentityFile
+		if strings.HasPrefix(identityFile, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("failed to get user home directory to expand path: %w", err)
 			}
+			identityFile = filepath.Join(home, identityFile[2:])
 		}
+
+		log.Printf("auth: IdentityFile specified (%s), using public key authentication exclusively.", conn.IdentityFile)
+		key, err := os.ReadFile(identityFile)
+		if err != nil {
+			return fmt.Errorf("failed to read identity file %s: %w", identityFile, err)
+		}
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			// This could be because the key is encrypted. Prompting for a passphrase is a potential enhancement.
+			return fmt.Errorf("failed to parse private key from %s: %w. The key may be passphrase-protected, which is not yet supported here", conn.IdentityFile, err)
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	} else {
-		// b. From default locations
+		// --- Standard Auth Method Probing ---
+
+		// 1. Public Keys from default locations
+		var signers []ssh.Signer
 		home, _ := os.UserHomeDir()
 		defaultKeyPaths := []string{
 			filepath.Join(home, ".ssh", "id_rsa"),
@@ -69,84 +83,84 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 				}
 			}
 		}
-	}
 
-	if len(signers) > 0 {
-		log.Printf("auth: found %d public key(s)", len(signers))
-		authMethods = append(authMethods, ssh.PublicKeys(signers...))
-	}
+		if len(signers) > 0 {
+			log.Printf("auth: found %d public key(s) in default locations", len(signers))
+			authMethods = append(authMethods, ssh.PublicKeys(signers...))
+		}
 
-	// --- 2. Keyboard Interactive ---
-	// Handles MFA/OTP and can also handle password prompts from the server.
-	challenge := func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
-		log.Printf("auth: keyboard-interactive challenge received. Questions: %v", questions)
-		answers = make([]string, len(questions))
-		for i, q := range questions {
-			q = strings.TrimSpace(q)
-			fmt.Printf("%s ", q)
+		// 2. Keyboard Interactive
+		challenge := func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+			log.Printf("auth: keyboard-interactive challenge received. Questions: %v", questions)
+			answers = make([]string, len(questions))
+			for i, q := range questions {
+				q = strings.TrimSpace(q)
+				fmt.Printf("%s ", q)
 
-			isPassword := strings.Contains(strings.ToLower(q), "password")
-			isMfa := strings.Contains(strings.ToLower(q), "verification code") || strings.Contains(strings.ToLower(q), "otp")
+				isPassword := strings.Contains(strings.ToLower(q), "password")
+				isMfa := strings.Contains(strings.ToLower(q), "verification code") || strings.Contains(strings.ToLower(q), "otp")
 
-			if isPassword {
-				var password string
-				password = conn.GetPassword()
-				if password == "" {
-					log.Printf("auth: prompting user for password via keyboard-interactive\n")
-
-					password, err = readPassword("Password: ")
+				if isPassword {
+					var password string
+					password = conn.GetPassword()
+					if password == "" {
+						log.Printf("auth: prompting user for password via keyboard-interactive\n")
+						password, err = readPassword("Password: ")
+						if err != nil {
+							return nil, err
+						}
+						usedPassword = password // Capture for saving
+					} else {
+						log.Printf("auth: using stored password for keyboard-interactive\n")
+					}
+					answers[i] = password
+				} else if isMfa {
+					var mfaSecret string
+					mfaSecret = conn.GetMfaSecret()
+					if mfaSecret == "" {
+						log.Printf("auth: prompting user for MFA secret via keyboard-interactive\n")
+						mfaSecret, err = readPassword("MFA Secret: ")
+						if err != nil {
+							return nil, err
+						}
+						usedMfaSecret = mfaSecret // Capture for saving
+					} else {
+						log.Printf("auth: using stored MFA secret for keyboard-interactive\n")
+					}
+					otp, err := km.GenerateOTP(mfaSecret)
+					if err != nil {
+						return nil, fmt.Errorf("failed to generate OTP: %w", err)
+					}
+					answers[i] = otp
+				} else {
+					log.Printf("auth: generic prompt in keyboard-interactive: %s", q)
+					ans, err := bufio.NewReader(os.Stdin).ReadString('\n')
 					if err != nil {
 						return nil, err
 					}
-					usedPassword = password // Capture for saving
-				} else {
-					log.Printf("auth: using stored password for keyboard-interactive\n")
+					answers[i] = strings.TrimSpace(ans)
 				}
-				answers[i] = password
-			} else if isMfa {
-				var mfaSecret string
-				mfaSecret = conn.GetMfaSecret()
-				if mfaSecret == "" {
-					log.Printf("auth: prompting user for MFA secret via keyboard-interactive\n")
-					mfaSecret, err = readPassword("MFA Secret: ")
-					if err != nil {
-						return nil, err
-					}
-					usedMfaSecret = mfaSecret // Capture for saving
-				} else {
-					log.Printf("auth: using stored MFA secret for keyboard-interactive\n")
-				}
-				otp, err := km.GenerateOTP(mfaSecret)
+			}
+			return answers, nil
+		}
+		authMethods = append(authMethods, ssh.KeyboardInteractive(challenge))
+
+		// 3. Password Callback
+		authMethods = append(authMethods, ssh.PasswordCallback(func() (secret string, err error) {
+			password := conn.GetPassword()
+			if password == "" {
+				log.Printf("auth: prompting user for password via password-callback")
+				password, err = readPassword("Password: ")
 				if err != nil {
-					return nil, fmt.Errorf("failed to generate OTP: %w", err)
+					return "", err
 				}
-				answers[i] = otp
+				usedPassword = password // Capture for saving
 			} else {
-				log.Printf("auth: generic prompt in keyboard-interactive: %s", q)
-				ans, err := bufio.NewReader(os.Stdin).ReadString('\n')
-				if err != nil {
-					return nil, err
-				}
-				answers[i] = strings.TrimSpace(ans)
+				log.Printf("auth: using stored password for password-callback")
 			}
-		}
-		return answers, nil
+			return password, nil
+		}))
 	}
-	authMethods = append(authMethods, ssh.KeyboardInteractive(challenge))
-	authMethods = append(authMethods, ssh.PasswordCallback(func() (secret string, err error) {
-		password := conn.GetPassword()
-		if password == "" {
-			log.Printf("auth: prompting user for password via keyboard-interactive")
-			password, err = readPassword("Password: ")
-			if err != nil {
-				return "", err
-			}
-			usedPassword = password // Capture for saving
-		} else {
-			log.Printf("auth: using stored password for keyboard-interactive")
-		}
-		return password, nil
-	}))
 
 	// Setup host key callback
 	hostKeyCallback, err := createHostKeyCallback()
