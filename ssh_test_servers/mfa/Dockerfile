@@ -15,6 +15,7 @@ RUN chmod 400 /home/testuser/.google_authenticator
 
 # SSH server configuration
 COPY sshd_config /etc/ssh/sshd_config
+RUN echo "MaxStartups 100" >> /etc/ssh/sshd_config
 
 # PAM configuration for SSHD
 RUN echo "@include common-auth" > /etc/pam.d/sshd
@@ -29,4 +30,4 @@ RUN mkdir -p /run/sshd
 EXPOSE 22
 
 # Start SSH server
-CMD ["/usr/sbin/sshd", "-D"]
+CMD ["/usr/sbin/sshd", "-D", "-e"]

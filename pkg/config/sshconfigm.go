@@ -462,7 +462,10 @@ func SaveConfigFromConn(connConf SshConfigItem) {
 	// 存储密码
 	keym := group.getKeyManager()
 
-	if existConfig != nil && (existConfig.Password != connConf.Password || existConfig.MFASecret != connConf.MFASecret) {
+	oldPwd := keym.GetPwd(*existConfig)
+	oldMfa := keym.GetMAFSecret(*existConfig)
+
+	if existConfig != nil && (oldPwd != connConf.Password || oldMfa != connConf.MFASecret) {
 		keym.SavePwd(&connConf)
 		connConf.EditTime = time.Now().Format("2006-01-02 15:04:05")
 		ssm.UpdateConfig(connConf.Host, connConf)

@@ -122,7 +122,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 					continue
 				}
 				// 处理主机认证确认
-			if strings.Contains(line, "The authenticity of host") {
+				if strings.Contains(line, "The authenticity of host") {
 					// 自动确认主机指纹
 					_, err := pt.Write([]byte("yes\n"))
 					if err != nil {
@@ -142,7 +142,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 				// 	continue
 				// }
 				// 处理密码提示
-			if strings.Contains(strings.ToLower(line), "password") ||
+				if strings.Contains(strings.ToLower(line), "password") ||
 					strings.Contains(line, "Enter passphrase") ||
 					strings.Contains(line, "Password:") ||
 					strings.Contains(line, "password:") {
@@ -156,6 +156,7 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 
 						if password != "" && len(password) > 0 {
 							autoTryLoginTime += 1
+							// inputPassword = password // Capture the retrieved password
 						}
 					}
 
@@ -169,10 +170,11 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 							return
 						}
 						password = string(bytePassword)
-						inputPassword = password
+						inputPassword = password // Capture the user input password
 					}
 					// fmt.Println() // 在密码输入后换行
-					os.Stdout.WriteString("\n")
+					// os.Stdout.WriteString("\n")
+					time.Sleep(time.Millisecond * 100)
 					_, err = pt.Write([]byte(password + "\n"))
 					if err != nil {
 						errChan <- fmt.Errorf("failed to enter password: %v", err)
@@ -183,15 +185,16 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 				}
 
 				// 检查认证失败
-			if strings.Contains(line, "Permission denied") ||
+				if strings.Contains(line, "Permission denied") ||
 					strings.Contains(line, "Authentication failed") ||
 					strings.Contains(line, "Access denied") {
+					os.Stdout.WriteString(line)
 					errChan <- fmt.Errorf("authentication failure")
 					return
 				}
 
 				// 检查认证成功 - 出现命令提示符或成功连接
-			if strings.Contains(line, "$") ||
+				if strings.Contains(line, "$") ||
 					strings.Contains(line, "#") ||
 					strings.Contains(line, ">") ||
 					strings.Contains(line, "Last login") ||
@@ -203,12 +206,15 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 					return
 				}
 
-				if strings.Contains(line, "OTP Code") {
-					os.Stdout.WriteString(line + ",origianl secret")
+				if strings.Contains(line, "OTP Code") || strings.Contains(line, "Verification code:") {
+					os.Stdout.WriteString(line)
 					var optSecret string
 					if otpTryTime == 0 {
 						// optPwd, _ = km.GetMFASecret(username, host)
 						optSecret = connConf.GetMfaSecret()
+						// if optSecret != "" { // Check if retrieved
+						// inputOtpSecret = optSecret // Capture the retrieved MFA secret
+						// }
 					}
 					if optSecret == "" {
 						// reader := bufio.NewReader(os.Stdin)
@@ -220,10 +226,10 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 							return
 						}
 						optSecret = string(byteoptSecret)
-						inputOtpSecret = optSecret
+						inputOtpSecret = optSecret // Capture the user input MFA secret
 					}
 					optPwd, _ := km.GenerateOTP(optSecret)
-					inputOtpSecret = optSecret
+					// inputOtpSecret = optSecret
 					data = "" // 清空已处理的数据
 					_, err = pt.Write([]byte(optPwd + "\n"))
 					if err != nil {
@@ -282,24 +288,17 @@ func autoSSHWithLogin(pt *os.File, connConf config.SshConfigItem) (string, error
 }
 
 func savePwd(connConf config.SshConfigItem, otpSecret, inputPassword string) {
-	// username := connConf.User
-	// host := connConf.HostName
-
-	// if inputPassword != "" {
-	// 	ke.SavePassword(username, host, inputPassword)
-	// }
-
-	// if otpSecret != "" {
-	// 	ke.SaveMFASecret(username, host, otpSecret)
-	// }
-	if otpSecret != "" {
-		connConf.MFASecret = otpSecret
-	}
+	var updated bool
 	if inputPassword != "" {
 		connConf.Password = inputPassword
+		updated = true
+	}
+	if otpSecret != "" {
+		connConf.MFASecret = otpSecret
+		updated = true
 	}
 
-	if connConf.Password != "" || connConf.MFASecret != "" {
+	if updated {
 		config.SaveConfigFromConn(connConf)
 	}
 }

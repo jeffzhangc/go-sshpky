@@ -18,7 +18,7 @@ func TestSSHConfigManager_ValidateConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := config.NewSSHConfigManager(tt.configPath)
+			m := config.NewSSHConfigManager()
 			gotErr := m.ValidateConfig()
 			if gotErr != nil {
 				if !tt.wantErr {
@@ -35,7 +35,7 @@ func TestSSHConfigManager_ValidateConfig(t *testing.T) {
 
 // 使用示例
 func TestConfigManager(t *testing.T) {
-	manager := config.NewSSHConfigManager("abc")
+	manager := config.NewSSHConfigManager()
 
 	// 添加配置项
 	newConfig := config.SshConfigItem{
