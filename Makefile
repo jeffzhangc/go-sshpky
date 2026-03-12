@@ -1,8 +1,11 @@
 NAME=sshpky
 VERSION=$(shell cat VERSION)
-BUILD=$(shell git rev-parse --short HEAD)
+BUILD_TIME=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+GIT_COMMIT=$(shell git rev-parse HEAD)
+BUILD_NUMBER=$(shell date -u +'%Y%m%d%H%M%S')
+TREE_STATE=$(shell if [ -z "$(shell git status --porcelain)" ]; then echo "clean"; else echo "dirty"; fi)
 EXT_LD_FLAGS="-Wl"
-LD_FLAGS="-s -w -X main.version=$(VERSION) -X main.build=$(BUILD) -extldflags=$(EXT_LD_FLAGS)"
+LD_FLAGS="-s -w -X sshpky/pkg/common.version=$(VERSION) -X sshpky/pkg/common.buildTime=$(BUILD_TIME) -X sshpky/pkg/common.gitCommit=$(GIT_COMMIT) -X sshpky/pkg/common.buildNumber=$(BUILD_NUMBER) -X sshpky/pkg/common.treeState=$(TREE_STATE) -extldflags=$(EXT_LD_FLAGS)"
 OUTPUT_DIR=./bin
 
 clean:
