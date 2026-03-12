@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sshpky/pkg/common"
 
 	"github.com/spf13/cobra"
 )
 
 var (
 	configDir string
-	version   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -54,10 +52,6 @@ Examples:
 	},
 	// 如果没有子命令，默认执行 conn 命令
 	Run: func(cmd *cobra.Command, args []string) {
-		if version {
-			fmt.Println(common.GetVersionInfo().String())
-			return
-		}
 		// 如果没有参数，显示帮助信息
 		if len(args) == 0 {
 			cmd.Help()
@@ -114,14 +108,7 @@ func init() {
 	// 身份文件参数（标准 SSH 的 -i 参数）
 	rootCmd.Flags().StringVarP(&connArgs.IdentityFile, "identity", "i", "", "identity file (private key) for public key authentication")
 
-	// group 信息
-	rootCmd.PersistentFlags().StringVarP(&connArgs.Group, "group", "g", "", "group for this ssh")
-
 	rootCmd.Flags().StringVarP(&connArgs.HostName, "hostname", "", "", "hostname for this ssh")
-
-	rootCmd.Flags().BoolVarP(&version, "version", "v", false, "print the version information")
-
-	rootCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
 
 	// 添加 completion 命令
 	rootCmd.AddCommand(completionCmd)

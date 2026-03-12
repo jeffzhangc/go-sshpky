@@ -853,15 +853,7 @@ func min(a, b int) int {
 }
 
 // 更新 msBubble 函数
-func msBubble(args []string) {
-	groupName := ""
-	if len(args) > 0 {
-		groupName = args[0]
-	}
-	if connArgs.Group != "" {
-		groupName = connArgs.Group
-	}
-
+func msBubble(groupName string) {
 	model := initialModel(groupName)
 	if model.err != nil {
 		fmt.Printf("Error loading SSH configurations: %v\n", model.err)

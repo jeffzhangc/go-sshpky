@@ -17,9 +17,10 @@ This guide provides comprehensive instructions on how to use `go-sshpky` for man
     *   [`mg use`](#mg-use)
     *   [`mg delete`](#mg-delete)
 5.  [Command: `sshpky ms` (Manage SSH Configs)](#5-command-sshpky-ms-manage-ssh-configs)
-    *   [`ms list`](#ms-list)
+    *   [`ms list`](#ms-list-subcommand)
+    *   [`ms` with `-l` flag](#ms-with--l-flag)
     *   [`ms add`](#ms-add)
-    *   [`ms get`](#ms-get)
+    *   [`get`](#get)
     *   [`ms update`](#ms-update)
     *   [`ms delete`](#ms-delete)
 6.  [Command: `sshpky conn` (Connect)](#6-command-sshpky-conn-connect)
@@ -164,18 +165,35 @@ sshpky mg delete production
 
 ## 5. Command: `sshpky ms` (Manage SSH Configs)
 
-This command manages the individual SSH host configurations within your groups. If you don't specify a group with `-g`, it operates on the current default group (set by `sshpky mg use`).
+This command manages the individual SSH host configurations within your groups. It can be run interactively or in a non-interactive list mode.
 
-### `ms list`
+- **Interactive Mode (default)**: Running `sshpky ms` without flags starts a full-featured terminal UI where you can browse, search, add, update, and delete hosts.
+- **Non-Interactive Mode (`-l` or `--list`)**: Use the `-l` flag to quickly list hosts without entering the interactive UI.
 
-Lists all SSH host configurations in the specified (or default) group.
+You can specify a group with the `-g` flag; otherwise, it operates on the current default group (set by `sshpky mg use`).
+
+### `ms list` (Subcommand)
+
+Lists all SSH host configurations. This is similar to `sshpky ms -l`.
 
 ```bash
 # List hosts in the default group
 sshpky ms list
 
 # List hosts in the 'staging' group
-sshpky ms list -g staging
+sshpky ms list staging
+```
+
+### `ms` with `-l` flag
+
+Provides a quick, non-interactive list of hosts.
+
+```bash
+# List hosts in the default group
+sshpky ms -l
+
+# List hosts in the 'staging' group
+sshpky ms -l -g staging
 ```
 
 ### `ms add`
@@ -189,12 +207,22 @@ sshpky ms add
 
 The tool will prompt you for the host alias, connection details (`user@host`), and credentials.
 
-### `ms get`
+### `get`
 
 Retrieves and displays the details of a specific host configuration.
 
 ```bash
-sshpky ms get <host-alias>
+# Get details for a host in the default group
+sshpky get <host-alias>
+
+# Get details for a host in a specific group
+sshpky get <host-alias> -g <group-name>
+
+# Get the configuration in YAML format
+sshpky get <host-alias> -o yaml
+
+# Get only the password for a host
+sshpky get <host-alias> -k password
 ```
 
 ### `ms update`

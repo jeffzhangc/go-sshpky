@@ -14,6 +14,7 @@ var (
 	searchKeyword string
 	showDetail    bool
 	groupName     string
+	listMode      bool
 )
 
 /**
@@ -37,7 +38,14 @@ delete SSH key configurations, and view detailed information about individual it
 	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
 	Args:              cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		msBubble(args)
+		if groupName == "" && len(args) > 0 {
+			groupName = args[0]
+		}
+		if listMode {
+			listSSHConfigs(groupName, searchKeyword, showDetail)
+			return
+		}
+		msBubble(groupName)
 	},
 }
 
@@ -48,7 +56,11 @@ var msListCmd = &cobra.Command{
 	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
 	Run: func(cmd *cobra.Command, args []string) {
-		listSSHConfigs(args, searchKeyword, showDetail)
+		groupName := ""
+		if len(args) > 0 {
+			groupName = args[0]
+		}
+		listSSHConfigs(groupName, searchKeyword, showDetail)
 	},
 }
 
@@ -100,6 +112,10 @@ func init() {
 	msCmd.AddCommand(msAddCmd)
 	msCmd.AddCommand(msUpdateCmd)
 
+	msCmd.Flags().BoolVarP(&listMode, "list", "l", false, "List configurations and exit")
+	msCmd.Flags().StringVarP(&groupName, "group", "g", "", "group name")
+	msCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
+
 	// 为 list 命令添加标志
 	msListCmd.Flags().StringVarP(&searchKeyword, "search", "s", "", "Search keyword for filtering SSH configurations")
 	msListCmd.Flags().BoolVarP(&showDetail, "detail", "d", false, "Show detailed configuration information")
@@ -113,21 +129,11 @@ func msGetCmdValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]
 	return connValidArgs(cmd, args, toComplete)
 }
 
-func listSSHConfigs(args []string, searchKeyword string, showDetail bool) {
+func listSSHConfigs(groupName string, searchKeyword string, showDetail bool) {
 	manager := config.NewSSHConfigManager()
 
 	var configs []*config.SshConfigItem
 	var err error
-
-	// 确定要显示的组
-	groupName := connArgs.Group // Prioritize -g flag
-	if groupName == "" && len(args) > 0 {
-		groupName = args[0]
-	} else if groupName == "" {
-		// 使用当前激活的组
-		cfg := config.GetConfig()
-		groupName = cfg.Use
-	}
 
 	// 如果有搜索关键词，使用搜索功能
 	if searchKeyword != "" {
