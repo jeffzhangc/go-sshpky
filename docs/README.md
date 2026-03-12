@@ -1,20 +1,15 @@
 # Documentation
 
-This directory contains all project documentation organized by type:
+Welcome to the full documentation for `go-sshpky`. This section provides in-depth information about the project's design, features, and governance.
 
-## Directory Structure
+## Table of Contents
 
-- `governance/` - Project governance documents, including the constitution
-- `specs/` - Feature specifications and requirements
-- `processes/` - Development processes and workflows
+- **[Specifications](./specs/)**: Detailed specifications for major features and components.
+  - **[001-secure-ssh-mgmt](./specs/001-secure-ssh-mgmt/spec.md)**: Initial specification for secure SSH management.
+  - **[002-enhance-ssh-mgmt](./specs/002-enhance-ssh-mgmt/README.md)**: Enhancements to the SSH management system, including data models and plans.
 
-## Project Constitution
+- **[Governance](./governance/)**: Information about the project's governance model.
+  - **[Constitution](./governance/constitution.md)**: The core principles and rules of the project.
 
-The project constitution can be found at [governance/constitution.md](governance/constitution.md) and defines the core principles and governance rules for the project.
-
-## Feature Specifications
-
-Feature specifications are stored in the [specs/](specs/) directory, organized by feature number and name. Each feature includes:
-- Specification document (spec.md)
-- Checklists for validation
-- Research and planning documents
+- **[Usage Guides](./usage/)**: Detailed instructions on how to use `go-sshpky`.
+  - **[Comprehensive Usage Guide](./usage/guide.md)**: A full guide covering basic to advanced usage.

@@ -1,107 +1,70 @@
-# sshpky
+# Go-sshpky
 
-ssh client wrapper
+[![Go-sshpky](https://github.com/zhanghailiang/go-sshpky/actions/workflows/go.yml/badge.svg)](https://github.com/zhanghailiang/go-sshpky/actions/workflows/go.yml)
 
-替换 https://github.com/jeffzhangc/sshpky_zsh_plugin
+`go-sshpky` is a command-line tool for securely managing and using SSH private keys. It enhances security by integrating with system keychains and supporting hardware-based keys, while providing a user-friendly interface for managing SSH connections.
 
-## feature
+## Features
 
-1. 记录密码
-2. 记录 google auth secret
-3. 自动使用上次成功登陆的密码登录
-4. 如果有 otp 验证，自动使用上次记录的 secret 生成 otp 验证码进行尝试登录
-5. 新增 保存 连接成功的 ssh 信息 在配置文件中
-6. 删除 配置信息
-7. 配置信息分组
+*   **Secure Key Management**: Integrates with system keychains (macOS, Windows, Linux) to store private keys securely.
+*   **MFA/OTP Support**: Automatically handles Time-based One-Time Passwords (TOTP) for multi-factor authentication.
+*   **Simplified SSH Config**: Manages SSH configurations for multiple hosts with grouping.
+*   **User-Friendly CLI**: Provides an intuitive interface for key and connection management.
+*   **Cross-Platform**: Supports macOS, Linux, and Windows.
 
-## install
+## Installation
 
-```
-brew install jeffzhangc/tap/sshpky
+You can install `go-sshpky` using Go:
 
-```
-
-## build
-
-```
-make build
-make install
+```bash
+go install github.com/zhanghailiang/go-sshpky@latest
 ```
 
-## TODO
+Ensure that `$GOPATH/bin` is in your system's `PATH`.
 
-完善文档和使用图片
+## Quick Start
 
-```
-sshpky -h
-A comprehensive tool for managing SSH public keys and connections.
+### 1. Initialize Configuration
 
-Simplify your SSH key management and server connections with automatic
-key selection, group management, and secure credential storage.
+First, initialize the configuration file. This will create a default `~/.go-sshpky/config.yaml` file.
 
-If a HOST argument is provided, it will automatically connect to that host
-using the connection command. Otherwise, you can use subcommands for
-specific operations.
-
-Examples:
-  # Quick connect to a host (default behavior)
-  sshpky 10.1.102.32
-  sshpky user@example.com
-
-  # Connect with specific options
-  sshpky -u admin -p 2222 example.com
-  sshpky -g production webserver
-
-  # Use subcommands for other operations
-  sshpky mg list                    # List all groups
-  sshpky mg use production         # Switch to production group
-  sshpky conn -g staging appserver  # Connect to specific group's host
-  sshpky ms 	# manage ssh configItem for current group
-  sshpky ms groupA	# manage ssh configItem for gropuA
-
-Usage:
-  sshpky [flags] [HOST]
-  sshpky [command]
-
-Available Commands:
-  completion  Generate shell completion scripts
-  conn        Connet to a host using managed SSH keys
-  help        Help about any command
-  mg          Manage SSH key groups
-  ms          Manage SSH config items
-
-Flags:
-  -f, --config string       config file name (default "config.yaml")
-  -c, --config-dir string   config directory (default "/Users/xxx/.sshpky")
-  -g, --group string        group for this ssh
-  -h, --help                help for sshpky
-      --hostname string     hostname for this ssh
-  -i, --identity string     identity file (private key) for public key authentication
-  -p, --port int            SSH port (default 22)
-  -u, --user string         username for SSH connection
-
-Use "sshpky [command] --help" for more information about a command.
+```bash
+go-sshpky init
 ```
 
-## ssh config
+### 2. Add a New SSH Host
 
-common config
+Use the `add` command to add a new host to your configuration. This will guide you through the process of setting up the connection details.
 
-```
-ControlMaster auto
-ControlPath ~/.ssh/master-%r@%h:%p
-Host *
-    HostKeyAlgorithms +ssh-rsa
-    PubkeyAcceptedKeyTypes +ssh-rsa
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
+```bash
+go-sshpky add
 ```
 
-## referece
+You will be prompted to enter:
+- A name for the host.
+- The SSH user and hostname (`user@host`).
+- The authentication method (e.g., password, private key, hardware key).
 
-1. [tssh](https://github.com/luanruisong/tssh)
-2. [trzsz-ssh](https://github.com/trzsz/trzsz-ssh)
-3. [crypto](https://github.com/golang/crypto)
-4. [goexpect](https://github.com/google/goexpect)
-5. [sshpass](https://github.com/billcoding/sshpass)
-6. [otp](https://github.com/pquerna/otp)
+### 3. Connect to a Host
+
+Once a host is added, you can connect to it using the `conn` command.
+
+```bash
+go-sshpky conn <host-name>
+```
+
+### 4. List Hosts
+
+To see a list of all configured hosts, use the `list` command.
+
+```bash
+go-sshpky list
+```
+
+## Documentation
+
+For more detailed information, advanced usage, and architectural details, please refer to our [full documentation](./docs/README.md).
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
