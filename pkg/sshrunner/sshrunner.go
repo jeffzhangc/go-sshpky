@@ -3,6 +3,7 @@ package sshrunner
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -19,14 +20,14 @@ import (
 	"golang.org/x/term"
 )
 
-// RunSSH establishes an interactive SSH connection using the native Go SSH library.
-// It handles public key, password, and keyboard-interactive (MFA/OTP) authentication.
-func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
+// establishSSHClient sets up and dials an SSH connection, handling all auth.
+func establishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, error) {
 	ms := config.NewSSHConfigManager()
-	cnf, _ := ms.FindConfig(conn.Host)
-	if cnf != nil {
-		conn = *cnf
+	cnf, err := ms.FindConfig(hostAlias)
+	if err != nil {
+		return nil, config.SshConfigItem{}, fmt.Errorf("failed to find config for host alias '%s': %w", hostAlias, err)
 	}
+	conn := *cnf
 
 	if conn.User == "" {
 		currentUser, err := user.Current()
@@ -41,32 +42,26 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 	var usedPassword, usedMfaSecret string
 	authMethods := []ssh.AuthMethod{}
 
-	// If an IdentityFile is specified, prioritize it and use it exclusively.
 	if conn.IdentityFile != "" {
 		identityFile := conn.IdentityFile
 		if strings.HasPrefix(identityFile, "~/") {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return fmt.Errorf("failed to get user home directory to expand path: %w", err)
+				return nil, conn, fmt.Errorf("failed to get user home directory to expand path: %w", err)
 			}
 			identityFile = filepath.Join(home, identityFile[2:])
 		}
-
 		log.Printf("auth: IdentityFile specified (%s), using public key authentication exclusively.", conn.IdentityFile)
 		key, err := os.ReadFile(identityFile)
 		if err != nil {
-			return fmt.Errorf("failed to read identity file %s: %w", identityFile, err)
+			return nil, conn, fmt.Errorf("failed to read identity file %s: %w", identityFile, err)
 		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			// This could be because the key is encrypted. Prompting for a passphrase is a potential enhancement.
-			return fmt.Errorf("failed to parse private key from %s: %w. The key may be passphrase-protected, which is not yet supported here", conn.IdentityFile, err)
+			return nil, conn, fmt.Errorf("failed to parse private key from %s: %w. Key may be passphrase-protected, not yet supported", conn.IdentityFile, err)
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	} else {
-		// --- Standard Auth Method Probing ---
-
-		// 1. Public Keys from default locations
 		var signers []ssh.Signer
 		home, _ := os.UserHomeDir()
 		defaultKeyPaths := []string{
@@ -83,47 +78,42 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 				}
 			}
 		}
-
 		if len(signers) > 0 {
 			log.Printf("auth: found %d public key(s) in default locations", len(signers))
 			authMethods = append(authMethods, ssh.PublicKeys(signers...))
 		}
 
-		// 2. Keyboard Interactive
 		challenge := func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
-			log.Printf("auth: keyboard-interactive challenge received. Questions: %v", questions)
+			log.Printf("auth: keyboard-interactive challenge. Questions: %v", questions)
 			answers = make([]string, len(questions))
 			for i, q := range questions {
 				q = strings.TrimSpace(q)
 				fmt.Printf("%s ", q)
-
 				isPassword := strings.Contains(strings.ToLower(q), "password")
 				isMfa := strings.Contains(strings.ToLower(q), "verification code") || strings.Contains(strings.ToLower(q), "otp")
 
 				if isPassword {
-					var password string
-					password = conn.GetPassword()
+					var password string = conn.GetPassword()
 					if password == "" {
-						log.Printf("auth: prompting user for password via keyboard-interactive\n")
+						log.Printf("auth: prompting for password via keyboard-interactive\n")
 						password, err = readPassword("Password: ")
 						if err != nil {
 							return nil, err
 						}
-						usedPassword = password // Capture for saving
+						usedPassword = password
 					} else {
 						log.Printf("auth: using stored password for keyboard-interactive\n")
 					}
 					answers[i] = password
 				} else if isMfa {
-					var mfaSecret string
-					mfaSecret = conn.GetMfaSecret()
+					var mfaSecret string = conn.GetMfaSecret()
 					if mfaSecret == "" {
-						log.Printf("auth: prompting user for MFA secret via keyboard-interactive\n")
+						log.Printf("auth: prompting for MFA secret via keyboard-interactive\n")
 						mfaSecret, err = readPassword("MFA Secret: ")
 						if err != nil {
 							return nil, err
 						}
-						usedMfaSecret = mfaSecret // Capture for saving
+						usedMfaSecret = mfaSecret
 					} else {
 						log.Printf("auth: using stored MFA secret for keyboard-interactive\n")
 					}
@@ -145,16 +135,15 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 		}
 		authMethods = append(authMethods, ssh.KeyboardInteractive(challenge))
 
-		// 3. Password Callback
 		authMethods = append(authMethods, ssh.PasswordCallback(func() (secret string, err error) {
 			password := conn.GetPassword()
 			if password == "" {
-				log.Printf("auth: prompting user for password via password-callback")
+				log.Printf("auth: prompting for password via password-callback")
 				password, err = readPassword("Password: ")
 				if err != nil {
 					return "", err
 				}
-				usedPassword = password // Capture for saving
+				usedPassword = password
 			} else {
 				log.Printf("auth: using stored password for password-callback")
 			}
@@ -162,14 +151,12 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 		}))
 	}
 
-	// Setup host key callback
 	hostKeyCallback, err := createHostKeyCallback()
 	if err != nil {
-		return fmt.Errorf("failed to create host key callback: %w", err)
+		return nil, conn, fmt.Errorf("failed to create host key callback: %w", err)
 	}
 
 	log.Printf("auth: offering %d method(s)", len(authMethods))
-
 	clientConfig := &ssh.ClientConfig{
 		User:            conn.User,
 		Auth:            authMethods,
@@ -177,17 +164,67 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 		Timeout:         15 * time.Second,
 	}
 
-	// Dial
 	addr := fmt.Sprintf("%s:%d", conn.HostName, conn.Port)
 	log.Printf("ssh: dialing %s with user %s", addr, conn.User)
 	client, err := ssh.Dial("tcp", addr, clientConfig)
 	if err != nil {
-		return fmt.Errorf("failed to dial: %w", err)
+		return nil, conn, fmt.Errorf("failed to dial: %w", err)
+	}
+
+	go savePwd(conn, usedMfaSecret, usedPassword)
+	return client, conn, nil
+}
+
+// RunCommand executes a non-interactive command on a remote host.
+// It streams stdout/stderr and returns the command's exit code.
+func RunCommand(hostAlias string, command string, scriptContent io.Reader) (int, error) {
+	client, _, err := establishSSHClient(hostAlias)
+	if err != nil {
+		return 1, err
 	}
 	defer client.Close()
 
-	// Save credentials if any new ones were used
-	go savePwd(conn, usedMfaSecret, usedPassword)
+	session, err := client.NewSession()
+	if err != nil {
+		return 1, fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+
+	if scriptContent != nil {
+		session.Stdin = scriptContent
+		if command == "" {
+			// If we are running a script, and no command is specified,
+			// we should explicitly run a shell to interpret the script.
+			command = "/bin/sh"
+		}
+	}
+
+	err = session.Run(command)
+	if err != nil {
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			// Command ran and exited with a non-zero status. This is not a
+			// library error. We return the exit code.
+			return exitErr.ExitStatus(), nil
+		}
+		// Other errors (network, etc.)
+		return 1, fmt.Errorf("failed to run command: %w", err)
+	}
+
+	// Command ran successfully.
+	return 0, nil
+}
+
+// RunSSH establishes an interactive SSH connection using the native Go SSH library.
+// It handles public key, password, and keyboard-interactive (MFA/OTP) authentication.
+func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
+	client, _, err := establishSSHClient(conn.Host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
 
 	// Create session
 	session, err := client.NewSession()

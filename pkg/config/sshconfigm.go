@@ -439,6 +439,32 @@ func (m *SSHConfigManager) ValidateConfig() error {
 	return err
 }
 
+// For testing purposes only
+func SetConfigPath(path string) {
+	// Re-initialize the singleton with a specific path
+	once = sync.Once{}
+	sshConfigM = nil
+	commonConf = []string{}
+	sshConfigs = []*SshConfigItem{}
+
+	once.Do(func() {
+		sshConfigM = &SSHConfigManager{
+			ConfigPath: path,
+		}
+		sshConfigs, _ = sshConfigM.readConfig()
+	})
+}
+
+// For testing purposes only
+func ResetConfigManager() {
+	// Reset the singleton to its initial state
+	once = sync.Once{}
+	sshConfigM = nil
+	commonConf = []string{}
+	sshConfigs = []*SshConfigItem{}
+	NewSSHConfigManager() // Re-initialize with default path
+}
+
 // 对外方法，保存 configItem
 func SaveConfigFromConn(connConf SshConfigItem) {
 	ssm := NewSSHConfigManager()

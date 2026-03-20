@@ -58,7 +58,7 @@ The `go-sshpky` tool currently provides robust SSH key management and connection
 
 The recommended solution is to implement the two new subcommands (`rsync` and `exec`) using the Cobra library, consistent with the existing command structure.
 
-*   For the `rsync` command, we will leverage an underlying Go library that implements the rsync protocol or, more pragmatically, wrap the system's `rsync` command, dynamically generating the necessary SSH connection arguments from `go-sshpky`'s configuration. Given the complexity of the rsync protocol, wrapping the existing `rsync` binary is the most practical approach. The implementation will parse the `<host_alias>:<path>` syntax and translate it into the appropriate `user@host:path` format for the `rsync` command's `-e` ssh option.
+*   For the `rsync` command, a native Go implementation will be developed to provide rsync-like functionality without depending on an external `rsync` binary. This will be achieved using the SFTP protocol over the established SSH connection. A Go SFTP library (e.g., `github.com/pkg/sftp`) will be used to programmatically list directories, compare file metadata (modification time, size), and transfer files. This approach ensures `go-sshpky` is self-contained and allows for a custom implementation of core features like incremental updates and deletions.
 
 *   For the `exec` command, we will use the `golang.org/x/crypto/ssh` library, which is likely already a dependency. The command will establish an SSH session, execute the provided command or script, and pipe the remote `stdout` and `stderr` directly to the local process's `os.Stdout` and `os.Stderr` to achieve real-time streaming. The exit code from the remote command will be captured and used for the local process's exit code.
 
@@ -69,7 +69,7 @@ The recommended solution is to implement the two new subcommands (`rsync` and `e
 3.  The command's handler retrieves the host configuration (user, address, auth method) for `<host_alias>` using existing config management logic in `pkg/config`.
 4.  An SSH connection is established using the retrieved credentials.
     *   **For `exec`:** An SSH channel is opened, the command is executed, I/O is streamed, and the exit code is captured.
-    *   **For `rsync`:** A child `rsync` process is spawned. The `-e` flag is configured to use `ssh` with the correct identity file, port, and user for the target host.
+    *   **For `rsync`:** An SFTP session is initiated over the SSH connection. The native Go implementation will then perform directory traversal, file metadata comparison, and file transfers using the SFTP session.
 5.  Errors (connection, execution) are reported to the user.
 6.  The `go-sshpky` process exits with the appropriate exit code (0 for success, remote's exit code on failure, or a custom error code for connection issues).
 
@@ -108,7 +108,7 @@ go-sshpky exec my-server -f ./deploy.sh
 *   **Authentication Failure:** Report auth failure clearly and exit.
 *   **Connection Failure:** Report network or SSH handshake errors and exit.
 *   **Remote Command Failure (`exec`):** The error will be visible in the streamed stderr. The process will exit with the remote command's exit code.
-*   **`rsync` Failure:** The stderr from the underlying `rsync` process will be streamed to the user. The process will exit with the `rsync` process's exit code.
+*   **`rsync` Failure:** Errors from the native SFTP implementation (e.g., permission denied, I/O errors) will be reported to the user. The process will exit with a non-zero status code.
 
 ## 9. Rollout / Migration / Rollback
 
@@ -120,7 +120,7 @@ go-sshpky exec my-server -f ./deploy.sh
 
 1.  **Task 1 (Setup):** Create new command files `cmd/rsync.go` and `cmd/exec.go` using Cobra structure.
 2.  **Task 2 (`exec` implementation):** Implement the `exec` command logic using the `golang.org/x/crypto/ssh` package. Add support for inline commands and the `--file` flag. Ensure I/O streaming and exit code propagation.
-3.  **Task 3 (`rsync` implementation):** Implement the `rsync` command by creating a wrapper around the system `rsync` command. Implement the logic to parse `<host_alias>:<path>` and construct the correct `ssh` command for `rsync -e`.
+3.  **Task 3 (`rsync` implementation):** Implement the native `rsync` command logic using a Go SFTP library. This includes directory traversal, file metadata comparison, handling uploads/downloads, and implementing flags like `--delete`.
 4.  **Task 4 (Testing):** Add unit and integration tests for both commands, covering success paths, argument parsing, and error conditions.
 5.  **Task 5 (Documentation):** Update `README.md` and any relevant CLI help text to document the new commands.
 

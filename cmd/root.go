@@ -12,6 +12,7 @@ import (
 
 var (
 	configDir string
+	osExit    = os.Exit
 )
 
 var rootCmd = &cobra.Command{
