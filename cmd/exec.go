@@ -40,13 +40,13 @@ Examples:
 					b.WriteString(" ")
 				}
 				// Basic shell quoting. This is not foolproof but handles many cases.
-				if strings.ContainsAny(p, " '\"\\`$*?[]{}()<>|&;") {
-					b.WriteString("'")
-					b.WriteString(strings.ReplaceAll(p, "'", `'\''`))
-					b.WriteString("'")
-				} else {
-					b.WriteString(p)
-				}
+				// if strings.ContainsAny(p, " '\"\\`$*?[]{}()<>|&;") {
+				// 	b.WriteString("'")
+				// 	b.WriteString(strings.ReplaceAll(p, "'", `'\''`))
+				// 	b.WriteString("'")
+				// } else {
+				b.WriteString(p)
+				// }
 			}
 			commandToRun = b.String()
 		} else if len(args) > 1 {

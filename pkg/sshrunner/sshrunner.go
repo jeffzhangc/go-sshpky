@@ -21,7 +21,7 @@ import (
 )
 
 // establishSSHClient sets up and dials an SSH connection, handling all auth.
-func establishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, error) {
+func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, error) {
 	ms := config.NewSSHConfigManager()
 	cnf, err := ms.FindConfig(hostAlias)
 	if err != nil {
@@ -178,7 +178,7 @@ func establishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 // RunCommand executes a non-interactive command on a remote host.
 // It streams stdout/stderr and returns the command's exit code.
 func RunCommand(hostAlias string, command string, scriptContent io.Reader) (int, error) {
-	client, _, err := establishSSHClient(hostAlias)
+	client, _, err := EstablishSSHClient(hostAlias)
 	if err != nil {
 		return 1, err
 	}
@@ -202,6 +202,12 @@ func RunCommand(hostAlias string, command string, scriptContent io.Reader) (int,
 		}
 	}
 
+	// 去除前后 单引号
+	// command = strings.Trim(command, "'")
+	if strings.HasPrefix(command, "'") && strings.HasSuffix(command, "'") {
+		command = command[1 : len(command)-1]
+	}
+
 	err = session.Run(command)
 	if err != nil {
 		if exitErr, ok := err.(*ssh.ExitError); ok {
@@ -220,7 +226,7 @@ func RunCommand(hostAlias string, command string, scriptContent io.Reader) (int,
 // RunSSH establishes an interactive SSH connection using the native Go SSH library.
 // It handles public key, password, and keyboard-interactive (MFA/OTP) authentication.
 func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
-	client, _, err := establishSSHClient(conn.Host)
+	client, _, err := EstablishSSHClient(conn.Host)
 	if err != nil {
 		return err
 	}

@@ -26,7 +26,7 @@ func TestExecCommand_Failing(t *testing.T) {
 }
 
 func TestExecCommand_ExitCodePropagation(t *testing.T) {
-	_, stderr, exitCode := executeCommand(t, "exec", "t_pubkey", "--", "sh", "-c", "exit 42")
+	_, stderr, exitCode := executeCommand(t, "exec", "t_pubkey", "--", "sh", "-c 'exit 42'")
 
 	if exitCode != 42 {
 		t.Errorf("Expected exit code 42, got %d. Stderr: %s", exitCode, stderr)
