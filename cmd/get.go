@@ -18,9 +18,9 @@ var (
 var getCmd = &cobra.Command{
 	Use:   "get [HOSTNAME]",
 	Short: "Get SSH configuration for a specific host",
-	Long:  `Retrieves and displays the SSH configuration for a given host.`, 
+	Long:  `Retrieves and displays the SSH configuration for a given host.`,
 	Args:  cobra.ExactArgs(1),
-	ValidArgsFunction: getValidArgs,
+	ValidArgsFunction: ConnValidArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		host := args[0]
 		group, _ := cmd.Flags().GetString("group")
@@ -64,13 +64,6 @@ var getCmd = &cobra.Command{
 			printDefault(sshConfig)
 		}
 	},
-}
-
-func getValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	return connValidArgs(cmd, args, toComplete)
 }
 
 func printSpecificKey(sshConfig *config.SshConfigItem, key string) {
@@ -131,5 +124,5 @@ func init() {
 	getCmd.Flags().StringVarP(&outputFormat, "output", "o", "default", "Output format (default, json, yaml)")
 	getCmd.Flags().StringVarP(&specificKey, "key", "k", "", "Get a specific key value (e.g., password, mfasecret)")
 	getCmd.Flags().StringP("group", "g", "", "group for this ssh")
-	getCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
+	getCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 }

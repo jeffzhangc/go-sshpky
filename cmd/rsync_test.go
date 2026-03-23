@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"sshpky/pkg/config"
-	sftpPkg "sshpky/pkg/sftp"
-	"sshpky/pkg/sshrunner"
+	"sshpky/pkg/sshclient"
+	"sshpky/pkg/utils"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -39,7 +39,7 @@ func TestParseRemotePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := sftpPkg.ParseRemotePath(tt.path)
+			info := utils.ParseRemotePath(tt.path)
 			if info.IsRemote != tt.wantIsRemote {
 				t.Errorf("parseRemotePath().IsRemote = %v, want %v", info.IsRemote, tt.wantIsRemote)
 			}
@@ -345,7 +345,7 @@ func newSftpClient(t *testing.T, hostAlias string) (*ssh.Client, *sftp.Client) {
 		t.Fatalf("Failed to find config for host '%s': %v", hostAlias, err)
 	}
 
-	client, _, err := sshrunner.EstablishSSHClient(sshConfig.Host)
+	client, _, err := sshclient.EstablishSSHClient(sshConfig.Host)
 	if err != nil {
 		t.Fatalf("Failed to create ssh client for verification: %v", err)
 	}

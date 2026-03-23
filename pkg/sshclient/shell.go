@@ -1,4 +1,4 @@
-package sshrunner
+package sshclient
 
 import (
 	"errors"

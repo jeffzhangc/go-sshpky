@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sshpky/pkg/config"
-	"sshpky/pkg/sshrunner"
+	"sshpky/pkg/sshclient"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -28,7 +28,7 @@ Examples:
   # Connect with specific identity file
   sshpky conn -i ~/.ssh/custom_key user@example.com`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: connValidArgs,
+	ValidArgsFunction: ConnValidArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := parseDestination(args[0], &connArgs); err != nil {
 			fmt.Printf("Error parsing destination: %v\n", err)
@@ -39,72 +39,6 @@ Examples:
 	},
 }
 
-// connValidArgs 为 conn 命令提供自动补全建议
-func connValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		// 如果已经输入了参数，不再提供补全
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// 获取 group 参数值
-	group, _ := cmd.Flags().GetString("group")
-
-	// 加载配置
-	manager := config.NewSSHConfigManager()
-	var configs []*config.SshConfigItem
-	var err error
-
-	if group == "" {
-		cfg := config.GetConfig()
-		group = cfg.Use
-	}
-
-	if group != "" {
-		// 如果指定了 group，只显示该 group 下的 hosts
-		configs, err = manager.GetConfigsByGroup(group)
-		// } else {
-		// 	// 如果没有指定 group，使用默认 group
-		// 	cfg := config.GetConfig()
-		// 	if cfg.Use != "" {
-		// 		configs, err = manager.GetConfigsByGroup(cfg.Use)
-		// 	} else {
-		// 		// 如果没有默认 group，显示所有 hosts
-		// 		configs, err = manager.ReadConfig()
-		// }
-	}
-
-	if err != nil {
-		// 出错时返回空列表
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// 构建补全建议列表
-	var suggestions []string
-	for _, config := range configs {
-		// 添加 host 作为补全建议
-		suggestions = append(suggestions, config.Host)
-
-		// // 也可以添加 user@host 格式的补全建议
-		// if config.User != "" {
-		// 	suggestions = append(suggestions, fmt.Sprintf("%s@%s", config.User, config.Host))
-		// }
-	}
-
-	// 过滤以 toComplete 开头的建议
-	var filtered []string
-	for _, suggestion := range suggestions {
-		if strings.HasPrefix(suggestion, toComplete) {
-			filtered = append(filtered, suggestion)
-		}
-	}
-
-	// 如果没有匹配的，返回所有建议
-	if len(filtered) == 0 {
-		filtered = suggestions
-	}
-
-	return filtered, cobra.ShellCompDirectiveNoFileComp
-}
 func runConn(connArgs config.SshConfigItem, args []string) {
 	// 构建 SSH 命令
 	sshCmd := buildSSHCommand(connArgs)
@@ -112,7 +46,7 @@ func runConn(connArgs config.SshConfigItem, args []string) {
 
 	// 这里可以添加实际的 SSH 连接逻辑
 	// exec.Command("ssh", sshArgs...)
-	err := sshrunner.RunSSH(sshCmd, connArgs, args)
+	err := sshclient.RunSSH(sshCmd, connArgs, args)
 	if err != nil {
 		// panic(err)
 		fmt.Println("error", err.Error())
@@ -167,11 +101,6 @@ func buildSSHCommand(connArgs config.SshConfigItem) string {
 	return cmdStr
 }
 
-// groupFlagValidArgs 为 group 标志提供自动补全建议
-func groupFlagValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return groupUseValidArgs(cmd, args, toComplete)
-}
-
 func init() {
 	rootCmd.AddCommand(connectCmd)
 
@@ -190,5 +119,5 @@ func init() {
 	connectCmd.Flags().StringVarP(&connArgs.HostName, "hostname", "", "", "hostname for this ssh")
 
 	// 为 group 标志添加补全
-	connectCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
+	connectCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 }

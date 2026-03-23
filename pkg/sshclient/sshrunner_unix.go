@@ -1,7 +1,7 @@
 //go:build !windows
 // +build !windows
 
-package sshrunner
+package sshclient
 
 import (
 	"os"

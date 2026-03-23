@@ -26,10 +26,12 @@ This guide provides comprehensive instructions on how to use `go-sshpky` for man
 6.  [Command: `sshpky conn` (Connect)](#6-command-sshpky-conn-connect)
     *   [Connecting to a Managed Host](#connecting-to-a-managed-host)
     *   [Direct Connection](#direct-connection)
-7.  [Advanced Features](#7-advanced-features)
+7.  [Command: `sshpky exec` (Remote Execution)](#7-command-sshpky-exec-remote-execution)
+8.  [Command: `sshpky rsync` (File Synchronization)](#8-command-sshpky-rsync-file-synchronization)
+9.  [Advanced Features](#9-advanced-features)
     *   [Multi-Factor Authentication (MFA/OTP)](#multi-factor-authentication-mfaotp)
     *   [Using Identity Files (Private Keys)](#using-identity-files-private-keys)
-8.  [Example Workflow](#8-example-workflow)
+10. [Example Workflow](#10-example-workflow)
 
 ---
 
@@ -267,7 +269,62 @@ sshpky conn user@example.com
 sshpky conn -p 2222 -i ~/.ssh/my_key user@example.com
 ```
 
-## 7. Advanced Features
+## 7. Command: `sshpky exec` (Remote Execution)
+
+The `exec` command allows you to run non-interactive commands on a remote host.
+
+**Usage:** `sshpky exec <host_alias> -- '<command>'`
+
+-   The command to be executed must be enclosed in quotes and follow a `--` separator.
+
+**Flags:**
+
+-   `-g, --group`: Specify the group to which the host belongs. Provides autocompletion for hosts within that group.
+-   `-f, --file`: Path to a local script file to be executed on the remote host.
+
+**Examples:**
+
+```bash
+# Execute a simple command on a host in the default group
+sshpky exec my-server -- 'ls -la /var/www'
+
+# Execute a command on a host in a specific group
+sshpky exec -g production web-server-01 -- 'uptime'
+
+# Run a local script on the remote server
+sshpky exec my-server -f ./deploy.sh
+```
+
+## 8. Command: `sshpky rsync` (File Synchronization)
+
+The `rsync` command provides an `rsync`-like utility to synchronize files and directories between your local machine and a remote host using the SFTP protocol.
+
+**Usage:** `sshpky rsync <source> <destination>`
+
+-   Remote paths are specified in the format: `[user@]host_alias:path`.
+-   One of the paths (source or destination) must be local, and the other must be remote.
+
+**Flags:**
+
+-   `-a, --archive`: Archive mode. Preserves permissions and modification times.
+-   `-v, --verbose`: Enables verbose output, showing which files are being transferred.
+-   `--delete`: Deletes files on the destination that do not exist on the source.
+-   `-g, --group`: Specify the group for the remote host. This helps with autocompletion.
+
+**Examples:**
+
+```bash
+# Upload a local directory to the remote server
+sshpky rsync -av ./my-project my-server:/opt/web/
+
+# Download a remote directory to the local machine
+sshpky rsync -av my-server:/var/logs/ ./backup/logs/
+
+# Synchronize a directory and delete extraneous files from the destination
+sshpky rsync -av --delete ./local-app/ my-server:/app/
+```
+
+## 9. Advanced Features
 
 ### Multi-Factor Authentication (MFA/OTP)
 
@@ -277,7 +334,7 @@ When adding or updating a host with `sshpky ms`, you can provide a TOTP secret. 
 
 During the `sshpky ms add` process, you can choose "private key" as the authentication method and provide the path to your identity file (e.g., `~/.ssh/id_rsa`).
 
-## 8. Example Workflow
+## 10. Example Workflow
 
 Here is a complete example of setting up a new project:
 
@@ -309,3 +366,4 @@ sshpky ms list
 # 6. Connect to the web server
 sshpky conn web-server
 ```
+

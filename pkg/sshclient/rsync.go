@@ -1,11 +1,10 @@
-package sftp
+package sshclient
 
 import (
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/pkg/sftp"
 )
@@ -15,49 +14,6 @@ type RsyncOptions struct {
 	Archive bool // 归档模式，保留权限和时间
 	Verbose bool // 详细输出
 	Delete  bool // 删除目标目录中多余的文件
-}
-
-// RemotePathInfo 保存远程路径参数的解析结果
-type RemotePathInfo struct {
-	HostAlias string // SSH 配置中的主机别名
-	Path      string // 路径
-	Original  string // 原始输入
-	IsRemote  bool   // 是否为远程路径
-	User      string // 可选的用户名
-}
-
-// ParseRemotePath 解析路径参数 (如 "my-server:/remote/path" 或 "user@my-server:/remote/path")
-func ParseRemotePath(pathArg string) *RemotePathInfo {
-	info := &RemotePathInfo{Original: pathArg}
-	parts := strings.SplitN(pathArg, ":", 2)
-
-	if len(parts) != 2 || parts[0] == "" || strings.Contains(parts[0], "/") {
-		info.IsRemote = false
-		info.Path = pathArg
-		return info
-	}
-
-	info.IsRemote = true
-	info.Path = parts[1]
-
-	hostPart := parts[0]
-	if userAtIdx := strings.LastIndex(hostPart, "@"); userAtIdx != -1 {
-		info.User = hostPart[:userAtIdx]
-		info.HostAlias = hostPart[userAtIdx+1:]
-	} else {
-		info.HostAlias = hostPart
-	}
-
-	return info
-}
-
-// ExpandPath 展开路径中的 ~ 为用户主目录
-func ExpandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 // SyncLocalToRemote 将本地文件或目录同步到远程服务器

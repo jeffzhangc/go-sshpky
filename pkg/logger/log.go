@@ -8,6 +8,10 @@ import (
 var enableDebugLogging bool = false
 var envbleWarningLogging bool = false
 
+func SetDebugLevel(enable bool) {
+	enableDebugLogging = enable
+}
+
 func Debug(format string, a ...any) {
 	if !enableDebugLogging {
 		return

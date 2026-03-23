@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sshpky/pkg/common"
+	"sshpky/pkg/logger"
 
 	"github.com/spf13/cobra"
 )
@@ -13,6 +15,7 @@ import (
 var (
 	configDir string
 	osExit    = os.Exit
+	verbose   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -45,6 +48,10 @@ Examples:
   `,
 	Args: cobra.ArbitraryArgs, // 允许任意参数
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// 详细日志
+		if verbose {
+			logger.SetDebugLevel(true)
+		}
 		// 确保配置目录存在
 		if err := ensureConfigDir(); err != nil {
 			fmt.Printf("Error creating config directory: %v\n", err)
@@ -63,18 +70,7 @@ Examples:
 		runDefaultConn(args)
 	},
 	// 为 root 命令添加参数补全
-	ValidArgsFunction: rootValidArgs,
-}
-
-// rootValidArgs 为 root 命令提供自动补全建议
-func rootValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	// 如果已经有参数，不再提供补全
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// 获取所有可用的 hosts 作为补全建议
-	return connValidArgs(cmd, args, toComplete)
+	ValidArgsFunction: ConnValidArgs,
 }
 
 // runDefaultConn 执行默认的 conn 命令逻辑
@@ -95,10 +91,15 @@ func Execute() error {
 }
 
 func init() {
+	// 设置版本
+	rootCmd.Version = common.GetVersionInfo().String()
+	rootCmd.SetVersionTemplate(`{{.Version}}`)
+
 	homeDir, _ := os.UserHomeDir()
 	defaultConfigDir := filepath.Join(homeDir, ".sshpky")
 
 	rootCmd.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfigDir, "config directory")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "V", false, "enable verbose output")
 
 	// 用户参数 - 如果同时在 destination 和 -u 中指定，以 -u 为准
 	rootCmd.Flags().StringVarP(&connArgs.User, "user", "u", "", "username for SSH connection")

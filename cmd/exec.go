@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sshpky/pkg/sshrunner"
+	"sshpky/pkg/sshclient"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -22,7 +22,8 @@ Examples:
 
   # Execute a local script on the remote server
   sshpky exec my-server -f ./script.sh`,
-	Args: cobra.MinimumNArgs(1),
+	Args:              cobra.MinimumNArgs(1),
+	ValidArgsFunction: ConnValidArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		execFile, _ := cmd.Flags().GetString("file")
 		hostAlias := args[0]
@@ -74,7 +75,7 @@ Examples:
 			osExit(1)
 		}
 
-		exitCode, err := sshrunner.RunCommand(hostAlias, commandToRun, scriptContent)
+		exitCode, err := sshclient.RunCommand(hostAlias, commandToRun, scriptContent)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 		}
@@ -85,4 +86,6 @@ Examples:
 func init() {
 	rootCmd.AddCommand(execCmd)
 	execCmd.Flags().StringP("file", "f", "", "local script file to execute on the remote host")
+	execCmd.Flags().StringP("group", "g", "", "group for SSH hosts")
+	execCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 }

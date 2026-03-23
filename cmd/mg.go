@@ -8,7 +8,6 @@ import (
 	"sshpky/pkg/config"
 	"sshpky/pkg/utils"
 	"strconv"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -37,7 +36,7 @@ var groupUseCmd = &cobra.Command{
 	Short:             "Set default group",
 	Long:              `Set the default group to be used for SSH connections.`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
+	ValidArgsFunction: GroupUseValidArgs, // 添加自动补全函数
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) > 1 && args[0] == "compline" {
 
@@ -76,36 +75,6 @@ func init() {
 	groupCmd.AddCommand(groupDeleteCmd)
 
 	groupListCmd.Flags().BoolVar(&noheader, "no-headers", false, "no-headers")
-}
-
-// groupUseValidArgs 为 group use 命令提供自动补全建议
-func groupUseValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		// 如果已经输入了参数，不再提供补全
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// 获取所有可用的 group 名称
-	cfg := config.GetConfig()
-
-	groups := []string{}
-	for _, g := range cfg.Groups {
-		groups = append(groups, g.Name)
-	}
-	// 过滤以 toComplete 开头的建议
-	var filtered []string
-	for _, group := range groups {
-		if strings.HasPrefix(group, toComplete) {
-			filtered = append(filtered, group)
-		}
-	}
-
-	// 如果没有匹配的，返回所有建议
-	if len(filtered) == 0 {
-		filtered = groups
-	}
-
-	return filtered, cobra.ShellCompDirectiveNoFileComp
 }
 
 func listGroups(noheader bool) {

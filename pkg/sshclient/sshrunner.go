@@ -1,10 +1,9 @@
-package sshrunner
+package sshclient
 
 import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"sshpky/pkg/config"
 	"sshpky/pkg/km"
+	"sshpky/pkg/logger"
 	"strings"
 	"time"
 
@@ -32,10 +32,10 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 	if conn.User == "" {
 		currentUser, err := user.Current()
 		if err == nil {
-			log.Printf("ssh: user not specified, defaulting to current user %s", currentUser.Username)
+			logger.Debug("ssh: user not specified, defaulting to current user %s", currentUser.Username)
 			conn.User = currentUser.Username
 		} else {
-			log.Printf("ssh: warning: could not get current user: %v", err)
+			logger.Debug("ssh: warning: could not get current user: %v", err)
 		}
 	}
 
@@ -51,7 +51,7 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 			}
 			identityFile = filepath.Join(home, identityFile[2:])
 		}
-		log.Printf("auth: IdentityFile specified (%s), using public key authentication exclusively.", conn.IdentityFile)
+		logger.Debug("auth: IdentityFile specified (%s), using public key authentication exclusively.", conn.IdentityFile)
 		key, err := os.ReadFile(identityFile)
 		if err != nil {
 			return nil, conn, fmt.Errorf("failed to read identity file %s: %w", identityFile, err)
@@ -79,12 +79,12 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 			}
 		}
 		if len(signers) > 0 {
-			log.Printf("auth: found %d public key(s) in default locations", len(signers))
+			logger.Debug("auth: found %d public key(s) in default locations", len(signers))
 			authMethods = append(authMethods, ssh.PublicKeys(signers...))
 		}
 
 		challenge := func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
-			log.Printf("auth: keyboard-interactive challenge. Questions: %v", questions)
+			logger.Debug("auth: keyboard-interactive challenge. Questions: %v", questions)
 			answers = make([]string, len(questions))
 			for i, q := range questions {
 				q = strings.TrimSpace(q)
@@ -95,27 +95,27 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 				if isPassword {
 					var password string = conn.GetPassword()
 					if password == "" {
-						log.Printf("auth: prompting for password via keyboard-interactive\n")
+						logger.Debug("auth: prompting for password via keyboard-interactive\n")
 						password, err = readPassword("Password: ")
 						if err != nil {
 							return nil, err
 						}
 						usedPassword = password
 					} else {
-						log.Printf("auth: using stored password for keyboard-interactive\n")
+						logger.Debug("auth: using stored password for keyboard-interactive\n")
 					}
 					answers[i] = password
 				} else if isMfa {
 					var mfaSecret string = conn.GetMfaSecret()
 					if mfaSecret == "" {
-						log.Printf("auth: prompting for MFA secret via keyboard-interactive\n")
+						logger.Debug("auth: prompting for MFA secret via keyboard-interactive\n")
 						mfaSecret, err = readPassword("MFA Secret: ")
 						if err != nil {
 							return nil, err
 						}
 						usedMfaSecret = mfaSecret
 					} else {
-						log.Printf("auth: using stored MFA secret for keyboard-interactive\n")
+						logger.Debug("auth: using stored MFA secret for keyboard-interactive\n")
 					}
 					otp, err := km.GenerateOTP(mfaSecret)
 					if err != nil {
@@ -123,7 +123,7 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 					}
 					answers[i] = otp
 				} else {
-					log.Printf("auth: generic prompt in keyboard-interactive: %s", q)
+					logger.Debug("auth: generic prompt in keyboard-interactive: %s", q)
 					ans, err := bufio.NewReader(os.Stdin).ReadString('\n')
 					if err != nil {
 						return nil, err
@@ -138,14 +138,14 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 		authMethods = append(authMethods, ssh.PasswordCallback(func() (secret string, err error) {
 			password := conn.GetPassword()
 			if password == "" {
-				log.Printf("auth: prompting for password via password-callback")
+				logger.Debug("auth: prompting for password via password-callback")
 				password, err = readPassword("Password: ")
 				if err != nil {
 					return "", err
 				}
 				usedPassword = password
 			} else {
-				log.Printf("auth: using stored password for password-callback")
+				logger.Debug("auth: using stored password for password-callback")
 			}
 			return password, nil
 		}))
@@ -156,7 +156,7 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 		return nil, conn, fmt.Errorf("failed to create host key callback: %w", err)
 	}
 
-	log.Printf("auth: offering %d method(s)", len(authMethods))
+	logger.Debug("auth: offering %d method(s)", len(authMethods))
 	clientConfig := &ssh.ClientConfig{
 		User:            conn.User,
 		Auth:            authMethods,
@@ -165,7 +165,7 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 	}
 
 	addr := fmt.Sprintf("%s:%d", conn.HostName, conn.Port)
-	log.Printf("ssh: dialing %s with user %s", addr, conn.User)
+	logger.Debug("ssh: dialing %s with user %s", addr, conn.User)
 	client, err := ssh.Dial("tcp", addr, clientConfig)
 	if err != nil {
 		return nil, conn, fmt.Errorf("failed to dial: %w", err)
@@ -317,7 +317,7 @@ func createHostKeyCallback() (ssh.HostKeyCallback, error) {
 
 		// Host is not in known_hosts, add it
 		if len(keyErr.Want) == 0 {
-			log.Printf("Adding new host %s to known_hosts", hostname)
+			logger.Debug("Adding new host %s to known_hosts", hostname)
 			f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				return fmt.Errorf("could not write to known_hosts file: %v", err)
@@ -328,14 +328,14 @@ func createHostKeyCallback() (ssh.HostKeyCallback, error) {
 		}
 
 		// Host key mismatch. Remove old key and add new one.
-		log.Printf("WARNING: Host key mismatch for %s. Removing old key and adding new one.", hostname)
-		log.Printf("Old key fingerprint(s): %s", keyErr.Want[0].Key.Type())
-		log.Printf("New key fingerprint: %s", ssh.FingerprintSHA256(key))
+		logger.Debug("WARNING: Host key mismatch for %s. Removing old key and adding new one.", hostname)
+		logger.Debug("Old key fingerprint(s): %s", keyErr.Want[0].Key.Type())
+		logger.Debug("New key fingerprint: %s", ssh.FingerprintSHA256(key))
 
 		// Use ssh-keygen to remove the old key
 		cmd := exec.Command("ssh-keygen", "-R", hostname)
 		if err := cmd.Run(); err != nil {
-			log.Printf("WARNING: failed to remove old host key with ssh-keygen: %v", err)
+			logger.Debug("WARNING: failed to remove old host key with ssh-keygen: %v", err)
 			// Fallback to manual removal attempt
 			if err := removeHostFromKnownHostsManual(knownHostsPath, hostname); err != nil {
 				return fmt.Errorf("failed to remove old host key for %s: %w", hostname, err)

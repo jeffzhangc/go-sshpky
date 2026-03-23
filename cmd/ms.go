@@ -35,7 +35,7 @@ var msCmd = &cobra.Command{
 This command allows you to list, use, and manage different SSH key groups.
 You can list all configured SSH key groups, search for specific items, 
 delete SSH key configurations, and view detailed information about individual items.`,
-	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
+	ValidArgsFunction: GroupUseValidArgs, // 添加自动补全函数
 	Args:              cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if groupName == "" && len(args) > 0 {
@@ -54,7 +54,7 @@ var msListCmd = &cobra.Command{
 	Short:             "List all ssh client",
 	Long:              `List all configured SSH key groups and show the currently active group.`,
 	Args:              cobra.MaximumNArgs(1),
-	ValidArgsFunction: groupUseValidArgs, // 添加自动补全函数
+	ValidArgsFunction: GroupUseValidArgs, // 添加自动补全函数
 	Run: func(cmd *cobra.Command, args []string) {
 		groupName := ""
 		if len(args) > 0 {
@@ -79,7 +79,7 @@ var msGetCmd = &cobra.Command{
 	Short:             "Get SSH configuration details",
 	Long:              `Get detailed information about a specific SSH configuration.`,
 	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: msGetCmdValidArgs, // 添加自动补全函数
+	ValidArgsFunction: ConnValidArgs, // 添加自动补全函数
 	Run: func(cmd *cobra.Command, args []string) {
 		getSSHConfig(args[0])
 	},
@@ -114,7 +114,7 @@ func init() {
 
 	msCmd.Flags().BoolVarP(&listMode, "list", "l", false, "List configurations and exit")
 	msCmd.Flags().StringVarP(&groupName, "group", "g", "", "group name")
-	msCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
+	msCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 
 	// 为 list 命令添加标志
 	msListCmd.Flags().StringVarP(&searchKeyword, "search", "s", "", "Search keyword for filtering SSH configurations")
@@ -122,11 +122,7 @@ func init() {
 	msListCmd.Flags().BoolVar(&noheader, "no-headers", false, "no-headers")
 	msGetCmd.Flags().StringVarP(&groupName, "group", "g", "", "group name")
 	// 为 group 标志添加补全
-	msGetCmd.RegisterFlagCompletionFunc("group", groupFlagValidArgs)
-}
-
-func msGetCmdValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return connValidArgs(cmd, args, toComplete)
+	msGetCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 }
 
 func listSSHConfigs(groupName string, searchKeyword string, showDetail bool) {

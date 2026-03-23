@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sshpky/pkg/utils"
 
 	"sshpky/pkg/config"
-	sftpPkg "sshpky/pkg/sftp"
-	"sshpky/pkg/sshrunner"
+	"sshpky/pkg/sshclient"
 
 	"github.com/pkg/sftp"
 	"github.com/spf13/cobra"
@@ -34,13 +34,14 @@ Examples:
   # Upload with delete flag to remove extraneous files from destination
   sshpky rsync -av --delete ./local-dir my-server:/remote/app/
 `,
-	Args: cobra.ExactArgs(2),
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: RsyncValidArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfgManager := config.NewSSHConfigManager()
 
 		// 解析源和目标路径
-		sourceInfo := sftpPkg.ParseRemotePath(args[0])
-		destInfo := sftpPkg.ParseRemotePath(args[1])
+		sourceInfo := utils.ParseRemotePath(args[0])
+		destInfo := utils.ParseRemotePath(args[1])
 
 		// 验证源和目标不能同为远程或本地
 		if sourceInfo.IsRemote == destInfo.IsRemote {
@@ -54,7 +55,7 @@ Examples:
 		}
 
 		// 确定远程和本地路径信息
-		var remote, local *sftpPkg.RemotePathInfo
+		var remote, local *utils.RemotePathInfo
 		var isUpload bool
 		if sourceInfo.IsRemote {
 			remote, local = sourceInfo, destInfo
@@ -78,7 +79,7 @@ Examples:
 		}
 
 		// 建立 SSH 连接
-		client, _, err := sshrunner.EstablishSSHClient(sshConfig.Host)
+		client, _, err := sshclient.EstablishSSHClient(sshConfig.Host)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error establishing SSH connection: %v\n", err)
 			osExit(1)
@@ -96,21 +97,21 @@ Examples:
 		defer sftpClient.Close()
 
 		// 构建同步选项
-		opts := sftpPkg.RsyncOptions{
+		opts := sshclient.RsyncOptions{
 			Archive: rsyncArchive,
 			Verbose: rsyncVerbose,
 			Delete:  rsyncDelete,
 		}
 
 		// 展开本地路径中的 ~
-		localPath := sftpPkg.ExpandPath(local.Path)
+		localPath := utils.ExpandPath(local.Path)
 
 		// 执行同步
 		var syncErr error
 		if isUpload {
-			syncErr = sftpPkg.SyncLocalToRemote(sftpClient, localPath, remote.Path, opts)
+			syncErr = sshclient.SyncLocalToRemote(sftpClient, localPath, remote.Path, opts)
 		} else {
-			syncErr = sftpPkg.SyncRemoteToLocal(sftpClient, remote.Path, localPath, opts)
+			syncErr = sshclient.SyncRemoteToLocal(sftpClient, remote.Path, localPath, opts)
 		}
 
 		if syncErr != nil {
@@ -130,4 +131,6 @@ func init() {
 	rsyncCmd.Flags().BoolVarP(&rsyncArchive, "archive", "a", false, "archive mode; preserves permissions and times")
 	rsyncCmd.Flags().BoolVarP(&rsyncVerbose, "verbose", "v", false, "increase verbosity")
 	rsyncCmd.Flags().BoolVar(&rsyncDelete, "delete", false, "delete extraneous files from dest dirs")
+	rsyncCmd.Flags().StringP("group", "g", "", "group for SSH hosts")
+	rsyncCmd.RegisterFlagCompletionFunc("group", GroupFlagValidArgs)
 }
