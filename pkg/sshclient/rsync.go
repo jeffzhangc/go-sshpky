@@ -219,7 +219,7 @@ func downloadFile(sftpClient *sftp.Client, remoteFile, localFile string, opts Rs
 		return err
 	}
 
-	// 确保本地目录存在
+	// 确保 本地目录存在
 	if err := os.MkdirAll(filepath.Dir(localFile), 0755); err != nil {
 		return err
 	}

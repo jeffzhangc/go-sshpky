@@ -92,7 +92,7 @@ func RsyncValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]str
 		// and the first argument is not a remote path, then we can complete hosts for the second argument.
 		sourceInfo := utils.ParseRemotePath(args[0])
 		if sourceInfo.IsRemote {
-			// first arg is remote, second must be local, no host completion
+			// first arg is remote, second must be local, enable file completion
 			return nil, cobra.ShellCompDirectiveDefault
 		}
 	}
@@ -100,6 +100,12 @@ func RsyncValidArgs(cmd *cobra.Command, args []string, toComplete string) ([]str
 	// If completing more than the second argument, no completions.
 	if len(args) >= 2 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	// Check if the input looks like a local path (starts with ./, /, or ~/)
+	if strings.HasPrefix(toComplete, "./") || strings.HasPrefix(toComplete, "/") || strings.HasPrefix(toComplete, "~/") {
+		// Enable file/directory completion for local paths
+		return nil, cobra.ShellCompDirectiveDefault
 	}
 
 	// Completing first argument, or second argument when first is local.
