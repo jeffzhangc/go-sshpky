@@ -144,8 +144,10 @@ homebrew_casks:
     binary: "sshpky"
     url:
       verified: github.com/jeffzhangc/go-sshpky/download
-    uninstall:
-      trash:
-        - "~/.sshpky"
-    caveats: "sshpky help"
+    # uninstall:
+      # Do not automatically delete ~/.sshpky to preserve user configuration
+    caveats: |
+      sshpky help
+
+      Note: Configuration files are stored in ~/.sshpky. You can remove this directory if you want to completely uninstall all configuration data.
    

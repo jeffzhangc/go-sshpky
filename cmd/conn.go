@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/ssh"
 )
 
 var connArgs config.SshConfigItem
@@ -48,8 +49,13 @@ func runConn(connArgs config.SshConfigItem, args []string) {
 	// exec.Command("ssh", sshArgs...)
 	err := sshclient.RunSSH(sshCmd, connArgs, args)
 	if err != nil {
-		// panic(err)
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			// SSH session exited with a non-zero code, exit with the same code
+			os.Exit(exitErr.ExitStatus())
+		}
+		// Other error
 		fmt.Println("error", err.Error())
+		os.Exit(1)
 	}
 	fmt.Println("done..")
 }

@@ -276,7 +276,8 @@ func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
 			// The program has exited with an exit code != 0.
 			// This is not a problem with the connection itself.
 			// We can just exit with the same code.
-			os.Exit(exitErr.ExitStatus())
+			// os.Exit(exitErr.ExitStatus())
+			return exitErr
 		}
 		// It's some other error, like the connection broke.
 		return err

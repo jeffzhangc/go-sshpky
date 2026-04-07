@@ -89,6 +89,28 @@ install-user: build-local
 	cp $(OUTPUT_DIR)/$(NAME) ~/bin/$(NAME)
 	@echo "Installation completed. Make sure ~/bin is in your PATH."
 
+# Uninstall from system
+uninstall:
+	@echo "Uninstalling $(NAME) from system..."
+	$(eval HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo "/usr/local"))
+	@echo "Using prefix: $(HOMEBREW_PREFIX)"
+	
+	@echo "Removing binary from /usr/local/bin/..."
+	sudo rm -f /usr/local/bin/$(NAME)
+	
+	@echo "Removing shell completions..."
+	rm -f $(HOMEBREW_PREFIX)/etc/bash_completion.d/$(NAME)
+	rm -f $(HOMEBREW_PREFIX)/share/zsh/site-functions/_$(NAME)
+	rm -f $(HOMEBREW_PREFIX)/share/fish/vendor_completions.d/$(NAME).fish
+	
+	@echo "Uninstallation completed."
+
+# Uninstall from user's bin directory
+uninstall-user:
+	@echo "Uninstalling $(NAME) from ~/bin/..."
+	rm -f ~/bin/$(NAME)
+	@echo "Uninstallation completed."
+
 
 # Test GoReleaser configuration
 goreleaser-check:
@@ -145,4 +167,4 @@ info-simple:
 	@echo "🛠️  Go: $(shell go version | cut -d' ' -f3)"
 	@echo "💻 Platform: $(shell go env GOOS)/$(shell go env GOARCH)"
 
-.PHONY: build build-dev build-all build-local clean image release install install-user info info-simple
+.PHONY: build build-dev build-all build-local clean image release install install-user uninstall uninstall-user info info-simple
