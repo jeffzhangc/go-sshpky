@@ -14,7 +14,15 @@
 
 ## Installation
 
-You can install `go-sshpky` using Go:
+### Homebrew (macOS & Linux)
+
+```bash
+brew install jeffzhangc/tap/sshpky
+```
+
+### Go Install
+
+You can also install `go-sshpky` using Go:
 
 ```bash
 go install github.com/zhanghailiang/go-sshpky@latest
