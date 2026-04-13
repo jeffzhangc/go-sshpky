@@ -2,9 +2,11 @@ package config
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sshpky/pkg/utils"
 	"strconv"
 	"strings"
 	"sync"
@@ -477,8 +479,11 @@ func SaveConfigFromConn(connConf SshConfigItem) {
 
 	group := connConf.getGroup()
 	if group == nil {
-		fmt.Printf("group %s does not exist, cannot auto-save config\n", connConf.Group)
-		return
+		group = ensureAutoSaveGroup(connConf.Group)
+		if group == nil {
+			fmt.Printf("group %s does not exist, cannot auto-save config\n", connConf.Group)
+			return
+		}
 	}
 
 	keym := group.getKeyManager()
@@ -503,4 +508,39 @@ func SaveConfigFromConn(connConf SshConfigItem) {
 		ssm.AddConfig(connConf)
 		fmt.Printf("add %s success\n", connConf.Host)
 	}
+}
+
+func ensureAutoSaveGroup(groupName string) *SshpkyGroupConfig {
+	if groupName == "" {
+		groupName = DEFAULT_USENAME
+	}
+
+	for _, g := range config.Groups {
+		if g.Name == groupName {
+			group := g
+			return &group
+		}
+	}
+
+	secretBytes, err := utils.GenerateRandomKey(DEFAULT_KEYSIZE)
+	if err != nil {
+		fmt.Printf("failed to generate secret for auto-save group %s: %v\n", groupName, err)
+		return nil
+	}
+
+	group := SshpkyGroupConfig{
+		Name:     groupName,
+		Secret:   base64.RawStdEncoding.EncodeToString(secretBytes),
+		AutoSave: true,
+		Desc:     fmt.Sprintf("Auto-created group %s", groupName),
+		Category: StoreFile,
+	}
+
+	config.Groups = append(config.Groups, group)
+	if config.Use == "" {
+		config.Use = groupName
+	}
+	SaveConfig()
+
+	return &group
 }

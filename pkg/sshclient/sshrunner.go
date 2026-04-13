@@ -22,12 +22,30 @@ import (
 
 // establishSSHClient sets up and dials an SSH connection, handling all auth.
 func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, error) {
+	return establishSSHClient(hostAlias, nil)
+}
+
+func establishSSHClient(hostAlias string, fallbackConn *config.SshConfigItem) (*ssh.Client, config.SshConfigItem, error) {
 	ms := config.NewSSHConfigManager()
 	cnf, err := ms.FindConfig(hostAlias)
-	if err != nil {
+	var conn config.SshConfigItem
+	if err == nil && cnf != nil {
+		conn = *cnf
+	} else if fallbackConn != nil {
+		conn = *fallbackConn
+		if conn.Host == "" {
+			conn.Host = hostAlias
+		}
+		if conn.HostName == "" {
+			conn.HostName = conn.Host
+		}
+		if conn.Port == 0 {
+			conn.Port = 22
+		}
+		logger.Debug("ssh: config for host alias %s not found, using runtime connection parameters", hostAlias)
+	} else {
 		return nil, config.SshConfigItem{}, fmt.Errorf("failed to find config for host alias '%s': %w", hostAlias, err)
 	}
-	conn := *cnf
 
 	if conn.User == "" {
 		currentUser, err := user.Current()
@@ -66,8 +84,8 @@ func EstablishSSHClient(hostAlias string) (*ssh.Client, config.SshConfigItem, er
 		home, _ := os.UserHomeDir()
 		defaultKeyPaths := []string{
 			filepath.Join(home, ".ssh", "id_rsa"),
-			filepath.Join(home, ".ssh", "id_ed25519"),
-			filepath.Join(home, ".ssh", "id_dsa"),
+			// filepath.Join(home, ".ssh", "id_ed25519"),
+			// filepath.Join(home, ".ssh", "id_dsa"),
 		}
 		for _, keyPath := range defaultKeyPaths {
 			key, err := os.ReadFile(keyPath)
@@ -226,7 +244,7 @@ func RunCommand(hostAlias string, command string, scriptContent io.Reader) (int,
 // RunSSH establishes an interactive SSH connection using the native Go SSH library.
 // It handles public key, password, and keyboard-interactive (MFA/OTP) authentication.
 func RunSSH(sshCmd string, conn config.SshConfigItem, args []string) error {
-	client, _, err := EstablishSSHClient(conn.Host)
+	client, _, err := establishSSHClient(conn.Host, &conn)
 	if err != nil {
 		return err
 	}
