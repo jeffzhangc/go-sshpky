@@ -20,6 +20,7 @@ const (
 )
 
 func GenerateOTP(secret string) (string, error) {
+
 	return utils.GenerateCode(secret)
 }
 

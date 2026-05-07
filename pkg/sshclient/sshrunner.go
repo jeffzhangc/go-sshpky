@@ -132,14 +132,19 @@ func establishSSHClient(hostAlias string, fallbackConn *config.SshConfigItem) (*
 							return nil, err
 						}
 						usedMfaSecret = mfaSecret
+						otp, err := km.GenerateOTP(mfaSecret)
+						if err != nil {
+							return nil, fmt.Errorf("failed to generate OTP: %w, MFA Secret: %s", err, mfaSecret)
+						}
+						mfaSecret = otp
 					} else {
-						logger.Debug("auth: using stored MFA secret for keyboard-interactive\n")
+						logger.Debug("auth: using stored MFA secret for keyboard-interactive: %s\n", mfaSecret)
 					}
-					otp, err := km.GenerateOTP(mfaSecret)
-					if err != nil {
-						return nil, fmt.Errorf("failed to generate OTP: %w", err)
-					}
-					answers[i] = otp
+					// otp, err := km.GenerateOTP(mfaSecret)
+					// if err != nil {
+					// 	return nil, fmt.Errorf("failed to generate OTP: %w", err)
+					// }
+					answers[i] = mfaSecret
 				} else {
 					logger.Debug("auth: generic prompt in keyboard-interactive: %s", q)
 					ans, err := bufio.NewReader(os.Stdin).ReadString('\n')
